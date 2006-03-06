@@ -1,0 +1,128 @@
+<?php
+// $Id$
+
+/**
+ *  Established Sessions do NOT need to verify every page load.
+ *  new Session must deal w/ determining which connection is cut.
+ */
+
+/**
+ * Implementation of hook_settings().
+ */
+function session_limit_settings() {
+  $form['session_limit_max'] = array(
+    '#type' => 'select',
+    '#title' => t('Select the maximum # of active sessions a user can have'),
+    '#default_value' => variable_get('session_limit_max',1),
+    '#options' => array_combine(range(1, 5), range(1, 5)),
+  );
+
+  return $form;
+}
+
+/**
+ * Implementation of hook_help().
+ */
+function session_limit_help($section) {
+  switch ($section) {
+    case 'admin/modules#description':
+      return t('implements Session limits.');
+  }
+}
+
+
+/* implementation of hook_menu().
+ * Redirect user if over session_limit.
+ */
+function session_limit_menu($may_cache) {
+  if (!$may_cache) {
+    global $user;
+   
+    // Determine whether session has been verified. 
+    if (($user->uid > 1) && !isset($_SESSION['session_limit'])) {
+
+      // Exclude from the redirect.
+      switch ($_GET['q']) {
+        case 'session/limit':
+        case 'logout':
+          return;
+      }
+
+      $result = db_query(
+        'SELECT count(*) from {sessions} where uid = %d',
+        $user->uid);
+
+      if (db_result($result) > variable_get('session_limit_max', 1)) {
+        // redirect to session handler.
+        drupal_goto('session/limit');
+      } 
+      else {
+        // mark session as verified to bypass this in future.
+        $_SESSION['session_limit'] = TRUE;
+      }
+    } 
+  } 
+  else {
+    $items[] = array(
+      'path' => 'session/limit', 
+      'title' => t('Session Limit Exceeded'),
+      'callback' => 'session_limit_page',
+      'access' => TRUE,
+      'type' => MENU_CALLBACK,
+    );
+  }
+  return $items;
+}
+
+
+/**
+ * Display/Delete sessions..
+ */
+function session_limit_page() {
+  global $user;
+
+  if (!$user->uid > 0) {
+    drupal_goto();
+  }
+
+  $edit = $_POST['edit'];
+
+  if (isset($edit['sid'])) {
+
+      // remove selected session id.
+      db_query('DELETE from {sessions} where sid = "%s"',$edit['sid']);
+
+      // redirect to main page.
+      drupal_goto();
+  }
+
+  // Display form. (fallThrough)
+  $result = db_query('SELECT * from {sessions} where uid = %d',$user->uid);
+  while ($obj =  db_fetch_object($result)) {
+    if ($user->sid == $obj->sid) {
+      $message = t('<b> Your Current Session.</b>');
+    } 
+    else {
+      unset($message);
+    }
+
+    $sids[$obj->sid] = t('<b>Host:</b> %host (idle: %time) %message', 
+       array(
+        '%host' => $obj->hostname, 
+        '%message' => $message,
+        '%time' => format_interval(time() - $obj->timestamp))); 
+  }
+
+  $form['sid'] = array(
+    '#type' => 'radios',
+    '#title' => t('Select a Session to disconnect.'),
+    '#options' => $sids,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Disconnect',
+  );
+
+  $output = drupal_get_form('session_limit',$form);
+  print theme('page',$output);
+}
