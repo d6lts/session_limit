@@ -1,2 +1,3 @@
-name = Session Limit 
-description =  Limit simultaneous sessions.. 
+; $Id$
+name = Session Limit
+description =  Limit simultaneous user sessions.

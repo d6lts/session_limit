@@ -1,0 +1,10 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function session_limit_uninstall() {
+  variable_del('session_limit_max');
+  variable_del('session_limit_auto_drop');
+}
