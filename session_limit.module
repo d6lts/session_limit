@@ -25,6 +25,14 @@ function session_limit_settings() {
     '#title' => t('Automatically drop the oldest session without prompting.'),
     '#default_value' => variable_get('session_limit_auto_drop', 0)
   );
+  if (module_exists('masquerade')) {
+    $form['session_limit_masquerade_ignore'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Ignore masqueraded sessions.'),
+      '#description' => t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
+      '#default_value' => variable_get('session_limit_masquerade_ignore', false)
+    );
+  }
 
   return system_settings_form($form);
 }
@@ -41,6 +49,40 @@ function session_limit_help($section) {
 }
 
 /**
+ * Implementation of hook_init().
+ *
+ * Determine whether session has been verified.
+ */
+function session_limit_init() {
+  global $user;
+  if (variable_get('session_limit_max', 1) && ($user->uid > 1) && !isset($_SESSION['session_limit'])) {
+
+    // Exclude from the redirect.
+    if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
+      return;
+    }
+
+    if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', false)) {
+      $result = db_query('SELECT COUNT(s.uid) FROM {sessions} AS s
+        LEFT JOIN {masquerade} AS m ON s.uid = m.uid_as AND s.sid = m.sid
+        WHERE s.uid = %d AND m.sid IS NULL', $user->uid);
+    }
+    else {
+      $result = db_query('SELECT COUNT(*) FROM {sessions} WHERE uid = %d', $user->uid);
+    }
+
+    if (db_result($result) > variable_get('session_limit_max', 1)) {
+      // redirect to session handler.
+      drupal_goto('session/limit');
+    }
+    else {
+      // mark session as verified to bypass this in future.
+      $_SESSION['session_limit'] = TRUE;
+    }
+  }
+}
+
+/**
  * Implementation of hook_menu().
  * Redirect user if over session limit.
  */
@@ -48,33 +90,7 @@ function session_limit_menu($may_cache) {
   global $user;
   $items = array();
 
-  if (!$may_cache) {
-
-    // Determine whether session has been verified.
-    if (variable_get('session_limit_max', 1) && ($user->uid > 1) && !isset($_SESSION['session_limit'])) {
-
-      // Exclude from the redirect.
-      switch ($_GET['q']) {
-        case 'session/limit':
-        case 'logout':
-          return;
-      }
-
-      $result = db_query(
-        'SELECT COUNT(*) FROM {sessions} WHERE uid = %d',
-        $user->uid);
-
-      if (db_result($result) > variable_get('session_limit_max', 1)) {
-        // redirect to session handler.
-        drupal_goto('session/limit');
-      }
-      else {
-        // mark session as verified to bypass this in future.
-        $_SESSION['session_limit'] = TRUE;
-      }
-    }
-  }
-  else {
+  if ($may_cache) {
     $items[] = array(
       'path' => 'session/limit',
       'title' => t('Session Limit Exceeded'),

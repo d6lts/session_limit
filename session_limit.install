@@ -7,4 +7,5 @@
 function session_limit_uninstall() {
   variable_del('session_limit_max');
   variable_del('session_limit_auto_drop');
+  variable_del('session_limit_masquerade_ignore');
 }
