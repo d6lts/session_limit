@@ -2,6 +2,20 @@
 // $Id$
 
 /**
+ * @defgroup session_limit Limits multiple sessions per user.
+ *
+ * Limits multiple sessions per user.
+ */
+ /**
+ * @file
+ *
+ * Main module file for session_limit
+ *
+ * @ingroup session_limit
+ */
+
+
+/**
  *  Established Sessions do NOT need to verify every page load.
  *  new Session must deal w/ determining which connection is cut.
  */
@@ -11,66 +25,123 @@
  */
 function session_limit_settings() {
   $form['session_limit_max'] = array(
-    '#type' => 'select',
-    '#title' => t('Select the maximum # of active sessions a user can have'),
-    '#default_value' => variable_get('session_limit_max',1),
-    '#options' => array_combine(range(1, 5), range(1, 5)),
+    '#type' => 'textfield',
+    '#title' => t('Maximum number of active sessions'),
+    '#default_value' => variable_get('session_limit_max', 1),
+    '#size' => 2,
+    '#maxlength' => 3,
+    '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.')
+  );
+  $form['session_limit_auto_drop'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Automatically drop the oldest session without prompting.'),
+    '#default_value' => variable_get('session_limit_auto_drop', 0)
+  );
+  if (module_exists('masquerade')) {
+    $form['session_limit_masquerade_ignore'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Ignore masqueraded sessions.'),
+      '#description' => t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
+      '#default_value' => variable_get('session_limit_masquerade_ignore', FALSE)
+    );
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration')
   );
 
   return $form;
 }
 
-/**
- * Implementation of hook_help().
- */
-function session_limit_help($section) {
-  switch ($section) {
-    case 'admin/modules#description':
-      return t('implements Session limits.');
+function session_limit_settings_validate($form, &$form_state) {
+  $maxsessions = $form_state['values']['session_limit_max'];
+  if (!is_numeric($maxsessions)) {
+    form_set_error('session_limit_max', t('You must enter a number for the maximum number of active sessions'));
+  }
+  elseif ($maxsessions < 0) {
+    form_set_error('session_limit_max', t('Maximum number of active sessions must be positive'));
   }
 }
 
+function session_limit_settings_submit($form, &$form_state) {
+  variable_set('session_limit_max', $form_state['values']['session_limit_max']);
+  variable_set('session_limit_auto_drop', $form_state['values']['session_limit_auto_drop']);
+  variable_set('session_limit_masquerade_ignore', $form_state['values']['session_limit_masquerade_ignore']);
+  drupal_set_message(t('Settings saved.'));
+}
 
-/* implementation of hook_menu().
- * Redirect user if over session_limit.
+/**
+ * Implementation of hook_help().
  */
-function session_limit_menu($may_cache) {
-  if (!$may_cache) {
-    global $user;
-   
-    // Determine whether session has been verified. 
-    if (($user->uid > 1) && !isset($_SESSION['session_limit'])) {
-
-      // Exclude from the redirect.
-      switch ($_GET['q']) {
-        case 'session/limit':
-        case 'logout':
-          return;
-      }
-
-      $result = db_query(
-        'SELECT count(*) from {sessions} where uid = %d',
-        $user->uid);
-
-      if (db_result($result) > variable_get('session_limit_max', 1)) {
-        // redirect to session handler.
-        drupal_goto('session/limit');
-      } 
-      else {
-        // mark session as verified to bypass this in future.
-        $_SESSION['session_limit'] = TRUE;
-      }
-    } 
-  } 
-  else {
-    $items[] = array(
-      'path' => 'session/limit', 
-      'title' => t('Session Limit Exceeded'),
-      'callback' => 'session_limit_page',
-      'access' => TRUE,
-      'type' => MENU_CALLBACK,
-    );
+function session_limit_help($path, $args) {
+  switch ($path) {
+    case 'session/limit':
+      return t('The maximum number of simultaneous sessions (@num) for your account has been reached. You did not log off from a previous session or someone else is logged on to your account. This may indicate that your account has been compromised or that account sharing is limited on this site. Please contact the site administrator if you suspect your account has been compromised.', array('@num' => variable_get('session_limit_max', 1)));
   }
+}
+
+/**
+ * Implementation of hook_init().
+ *
+ * Determine whether session has been verified.
+ * Redirect user if over session limit.
+ */
+function session_limit_init() {
+  global $user;
+  if (variable_get('session_limit_max', 1) && ($user->uid > 1) && !isset($_SESSION['session_limit'])) {
+
+    // Exclude from the redirect.
+    if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
+      return;
+    }
+
+    if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', FALSE)) {
+      $result = db_query('SELECT COUNT(s.uid) FROM {sessions} AS s
+        LEFT JOIN {masquerade} AS m ON s.uid = m.uid_as AND s.sid = m.sid
+        WHERE s.uid = %d AND m.sid IS NULL', $user->uid);
+    }
+    else {
+      $result = db_query('SELECT COUNT(*) FROM {sessions} WHERE uid = %d', $user->uid);
+    }
+
+    if (db_result($result) > variable_get('session_limit_max', 1)) {
+      // redirect to session handler.
+      drupal_goto('session/limit');
+    }
+    else {
+      // mark session as verified to bypass this in future.
+      $_SESSION['session_limit'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function session_limit_menu() {
+  $items['session/limit'] = array(
+    'title' => 'Session limit exceeded',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_page'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK
+  );
+  $items['mysessions'] = array(
+    'title' => 'My sessions',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_page'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_SUGGESTED_ITEM
+  );
+  $items['admin/settings/session_limit'] = array(
+    'title' => 'Session Limit',
+    'description' => 'Configure session limits.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_settings'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM
+  );
   return $items;
 }
 
@@ -85,44 +156,75 @@ function session_limit_page() {
     drupal_goto();
   }
 
-  $edit = $_POST['edit'];
+  if (variable_get('session_limit_auto_drop', 0)) {
+    // Get the oldest session.
+    $sid = db_result(db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, 1));
 
-  if (isset($edit['sid'])) {
+    if ($sid) {
+      _session_limit_disconnect($sid);
+    }
 
-      // remove selected session id.
-      db_query('DELETE from {sessions} where sid = "%s"',$edit['sid']);
-
-      // redirect to main page.
-      drupal_goto();
+    drupal_goto();
   }
 
-  // Display form. (fallThrough)
-  $result = db_query('SELECT * from {sessions} where uid = %d',$user->uid);
+  $result = db_query('SELECT * FROM {sessions} WHERE uid = %d', $user->uid);
   while ($obj =  db_fetch_object($result)) {
     if ($user->sid == $obj->sid) {
-      $message = t('<b> Your Current Session.</b>');
-    } 
+      $message = t('Your current session.');
+    }
     else {
       unset($message);
     }
 
-    $sids[$obj->sid] = t('<b>Host:</b> %host (idle: %time) %message', 
-       array(
-        '%host' => $obj->hostname, 
-        '%message' => $message,
-        '%time' => format_interval(time() - $obj->timestamp))); 
+    $sids[$obj->sid] = t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>',
+      array(
+        '%host' => $obj->hostname,
+        '@message' => $message,
+        '%time' => format_interval(time() - $obj->timestamp))
+    );
   }
-
   $form['sid'] = array(
     '#type' => 'radios',
-    '#title' => t('Select a Session to disconnect.'),
+    '#title' => t('Select a session to disconnect.'),
     '#options' => $sids,
   );
   $form['submit'] = array(
     '#type' => 'submit',
-    '#value' => 'Disconnect',
+    '#value' => t('Disconnect session'),
   );
+  return $form;
+}
 
-  $output = drupal_get_form('session_limit',$form);
-  print theme('page',$output);
+/**
+ * Handler for submissions from session_limit_page().
+ */
+function session_limit_page_submit($form, &$form_state) {
+  global $user;
+
+  if ($user->sid == $form_state['values']['sid']) {
+    // force a normal logout for ourself.
+    drupal_set_message(t('Your session has been disconnected.'));
+    drupal_goto('logout');
+  }
+  else {
+    _session_limit_disconnect($form_state['values']['sid']);
+
+    drupal_set_message(t('Session has been disconnected.'));
+    // redirect to main page.
+    drupal_goto();
+  }
+}
+
+/**
+ * Logout a specific session id and leave them a message.
+ */
+function _session_limit_disconnect($sid) {
+  $logout_message = <<<EOM
+You have been automatically logged out.
+Someone else has logged in with your username and password and the maximum number of @num simultaneous sessions was exceeded.
+This may indicate that your account has been compromised or that account sharing is not allowed on this site.
+Please contact the site administrator if you suspect your account has been compromised.
+EOM;
+  $logout_message = 'messages|'. serialize(array('error' => array(t($logout_message, array('@num' => variable_get('session_limit_max', 1))))));
+  db_query("UPDATE {sessions} SET uid = 0, session = '%s' WHERE sid = '%s'", $logout_message, $sid);
 }

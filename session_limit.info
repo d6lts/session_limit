@@ -1,0 +1,4 @@
+; $Id$
+name = Session Limit
+description = "Limit simultaneous user sessions."
+core = 6.x
