@@ -102,7 +102,7 @@ function session_limit_settings() {
   );
   $form['session_limit_auto_drop'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Automatically drop the oldest session without prompting.'),
+    '#title' => t('Automatically drop the oldest sessions without prompting.'),
     '#default_value' => variable_get('session_limit_auto_drop', 0)
   );
   if (module_exists('masquerade')) {
@@ -238,8 +238,8 @@ function session_limit_token_values($type, $object = NULL, $options = array()) {
   if ($object == 'session_limit' || $object == 'system' || $type == 'global') {
     global $user;
     $tokens['session-limit-default'] = variable_get('session_limit_max', 1);
-    $tokens['session-limit-max']     = session_limit_user_max_sessions();
-    $tokens['session-limit-role']    = session_limit_user_max_sessions_byrole();
+    $tokens['session-limit-max']     = session_limit_user_max_sessions($user);
+    $tokens['session-limit-role']    = session_limit_user_max_sessions_byrole($user);
     $tokens['session-limit-user']    = empty($user->session_limit) ? 0 : check_plain($user->session_limit);
 
     return $tokens;
@@ -306,11 +306,13 @@ function session_limit_page() {
   global $user;
 
   if (variable_get('session_limit_auto_drop', 0)) {
-    // Get the oldest session.
-    $sid = db_result(db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, 1));
+    // Get the oldest sessions.
+    $count = db_result(db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = %d", $user->uid));
+    $max_sessions = $count - session_limit_user_max_sessions($user);
+    $result = db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, $max_sessions);
 
-    if ($sid) {
-      session_limit_invoke_session_limit($sid, 'disconnect');
+    while ($sids = db_fetch_object($result)) {
+      session_limit_invoke_session_limit($sids->sid, 'disconnect');
     }
 
     drupal_goto();
@@ -384,30 +386,32 @@ function session_limit_hook_info() {
   );
 }
 
-function session_limit_user_max_sessions() {
+function session_limit_user_max_sessions($account = array()) {
+  if (empty($account)) {
+    global $user;
+    $account = $user;
+  }
+
   static $limits;
   if (isset($limits[0])) {
     return $limits[0];
   }
 
   $limits['default'] = check_plain(variable_get('session_limit_max', 1));
-  $limits['user'] = session_limit_user_max_sessions_byuser();
-  $limits['role'] = session_limit_user_max_sessions_byrole();
+  $limits['user'] = session_limit_user_max_sessions_byuser($account);
+  $limits['role'] = session_limit_user_max_sessions_byrole($account);
 
   rsort($limits);
   return check_plain($limits[0]);
 }
 
-function session_limit_user_max_sessions_byuser() {
-  global $user;
-  return empty($user->session_limit) ? 0 : check_plain($user->session_limit);
+function session_limit_user_max_sessions_byuser($account) {
+  return empty($account->session_limit) ? 0 : check_plain($account->session_limit);
 }
 
-function session_limit_user_max_sessions_byrole() {
-  global $user;
-
+function session_limit_user_max_sessions_byrole($account) {
   $limits = array();
-  foreach ($user->roles as $rid => $name) {
+  foreach ($account->roles as $rid => $name) {
     $limits[] = variable_get("session_limit_rid_$rid", 0);
   }
 
