@@ -4,12 +4,10 @@
 /**
  * @file
  * Contains install and update functions for Session Limit.
- *
- * @ingroup session_limit
  */
 
 /**
- * Implementation of hook_uninstall().
+ * Implements hook_uninstall().
  */
 function session_limit_uninstall() {
   variable_del('session_limit_max');

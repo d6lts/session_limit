@@ -1,5 +1,7 @@
 ; $Id$
 name = Session Limit
 description = "Limit simultaneous user sessions."
-core = 6.x
+core = 7.x
 dependencies[] = trigger
+files[] = session_limit.install
+files[] = session_limit.module
