@@ -189,8 +189,15 @@ function session_limit_init() {
       session_limit_invoke_session_limit(session_id(), 'collision');
     }
     else {
-      // mark session as verified to bypass this in future.
-      $_SESSION['session_limit'] = TRUE;
+      // force checking this twice as there's a race condition around session creation.
+      // see issue #1176412
+      if (!isset($_SESSION['session_limit_checkonce'])) {
+        $_SESSION['session_limit_checkonce'] = TRUE;
+      }
+      else {
+        // mark session as verified to bypass this in future.
+        $_SESSION['session_limit'] = TRUE;
+      }
     }
   }
 }
