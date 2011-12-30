@@ -44,6 +44,7 @@ function session_limit_token_info() {
  * Implements hook_tokens().
  */
 function session_limit_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
   // The session limit variable does not need the user context.
   if ($type == 'session_limit') {
     foreach ($tokens as $name => $original) {
