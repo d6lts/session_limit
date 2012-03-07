@@ -165,7 +165,7 @@ function session_limit_settings_byrole() {
     $form["session_limit_rid_$rid"] = array(
       '#type' => 'select',
       '#options' => _session_limit_user_options(),
-      '#title' => $role,
+      '#title' => check_plain($role),
       '#default_value' => empty($role_limits["session_limit_rid_$rid"]) ? 0 : $role_limits["session_limit_rid_$rid"],
     );
   }
