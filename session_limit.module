@@ -42,7 +42,7 @@ function session_limit_help($path, $args) {
 /**
  * Implements hook_permission().
  */
-function session_limit_perm() {
+function session_limit_permission() {
   return array(
     'administer session limits by role' => array(
       'title' => t('Administer session limits by role'),
