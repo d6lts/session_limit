@@ -377,7 +377,7 @@ function session_limit_page_submit($form, &$form_state) {
 }
 
 function _session_limit_user_options() {
-  $options = drupal_map_assoc(range(0, 100));
+  $options = drupal_map_assoc(range(0, 250));
   $options[0] = t('Default');
   $options['999999'] = t('Disabled');
   return $options;
