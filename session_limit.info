@@ -1,7 +1,6 @@
 name = Session Limit
 description = "Limit simultaneous user sessions."
 core = 7.x
-dependencies[] = trigger
 files[] = session_limit.install
 files[] = session_limit.module
 files[] = session_limit.tokens.inc
