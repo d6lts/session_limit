@@ -6,14 +6,17 @@ the number of simultaneous sessions a user may have.
 Installation and configuration:
 -------------------------------
 Installation is as simple as copying the module into your 'modules' directory,
-then enabling the module at 'Administer >> Site building >> Modules'.
+then enabling the module.
 
 The default max sessions is 1. Change default max sessions can be changed in
-'Administer >> User management >> Session limit'.
+'Configuration >> People >> Session Limit'
+The path for this is /admin/config/people/session_limit
 
 Triggers are available to assign any of the three system actions to either the
 collision or disconnect events. That includes displaying a message to the user,
 sending an email, or redirecting to a different URL.
+
+Rules events are available for collision or disconnect events.
 
 Optional:
 ---------
@@ -31,9 +34,8 @@ http://drupal.org/project/stringoverrides
 
 Requires:
 ---------
- - Drupal 6.X
+ - Drupal 7.x
 
 Issue queue:
 ------------
-
 http://drupal.org/project/issues/session_limit
