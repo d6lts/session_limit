@@ -474,6 +474,30 @@ class SessionLimitLogoutTestCase extends SessionLimitBaseTestCase {
     $this->assertSessionLogout(5, $user);
     $this->closeAllSessions();
   }
+
+  /**
+   * Check that user override takes precedence over default and role regardless of max.
+   */
+  public function testSessionLimitUserMaxPrecedence() {
+    // Create a test user.
+    $user = $this->drupalCreateUser();
+    $roles = $this->sessionLimitMakeRoles($user);
+
+    // Add a personal session limit.
+    user_save($user, array('session_limit' => 1));
+
+    // Set the session limits for the roles.
+    variable_set('session_limit_rid_' . $roles[0]->rid, 3);
+    variable_set('session_limit_rid_' . $roles[1]->rid, 4);
+    variable_set('session_limit_rid_' . $roles[2]->rid, 5);
+
+    // Set the default session limit.
+    variable_set('session_limit_max', 2);
+
+    // Check if the user has access to only 1 session.
+    $this->assertSessionLogout(1, $user);
+    $this->closeAllSessions();
+  }
 }
 
 /**
@@ -567,6 +591,29 @@ class SessionLimitPreventTestCase extends SessionLimitBaseTestCase {
 
     // Check if the user has access to 5 sessions.
     $this->assertSessionPrevent(5, $user);
+  }
+
+  /**
+   * Checks that a user session limit is always used in preference to all others.
+   */
+  public function testSessionLimitUserMaxPrecedence() {
+    // Create a test user.
+    $user = $this->drupalCreateUser();
+    $roles = $this->sessionLimitMakeRoles($user);
+
+    // Add a personal session limit.
+    user_save($user, array('session_limit' => 1));
+
+    // Set the session limits for the roles.
+    variable_set('session_limit_rid_' . $roles[0]->rid, 3);
+    variable_set('session_limit_rid_' . $roles[1]->rid, 4);
+    variable_set('session_limit_rid_' . $roles[2]->rid, 5);
+
+    // Set the default session limit.
+    variable_set('session_limit_max', 2);
+
+    // Check if the user has access to 1 session, the user specified max.
+    $this->assertSessionPrevent(1, $user);
   }
 
 }

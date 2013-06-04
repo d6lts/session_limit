@@ -414,37 +414,70 @@ function session_limit_hook_info() {
   );
 }
 
-function session_limit_user_max_sessions($account = array()) {
+/**
+ * Get the maximum number of sessions for a user.
+ *
+ * @param user $account
+ *   (optional) The user account to check. If not
+ *   supplied the active user account is used.
+ */
+function session_limit_user_max_sessions($account = NULL) {
+  static $limits = array();
+
   if (empty($account)) {
-    global $user;
-    $account = $user;
+    $account = $GLOBALS['user'];
   }
 
-  static $limits;
-  if (isset($limits[0])) {
-    return $limits[0];
+  if (!isset($limits[$account->uid])) {
+    $limits[$account->uid] = (int) variable_get('session_limit_max', 1);
+    $limit_account = session_limit_user_max_sessions_byuser($account);
+    $limit_role = session_limit_user_max_sessions_byrole($account);
+
+    if ($limit_account > 0) {
+      $limits[$account->uid] = $limit_account;
+    }
+    elseif ($limit_role > 0) {
+      $limits[$account->uid] = $limit_role;
+    }
+
+    $limits[$account->uid] = (int) $limits[$account->uid];
   }
 
-  $limits['default'] = check_plain(variable_get('session_limit_max', 1));
-  $limits['user'] = session_limit_user_max_sessions_byuser($account);
-  $limits['role'] = session_limit_user_max_sessions_byrole($account);
-
-  rsort($limits);
-  return check_plain($limits[0]);
+  return $limits[$account->uid];
 }
 
+/**
+ * Get user specified session limit.
+ *
+ * @param user $account
+ *   The user account to get the session limit for
+ *
+ * @return int|bool
+ *   Maximum number of sessions or 0
+ */
 function session_limit_user_max_sessions_byuser($account) {
-  return empty($account->session_limit) ? 0 : check_plain($account->session_limit);
+  return (int) empty($account->session_limit) ? 0 : $account->session_limit;
 }
 
+/**
+ * Get the maximum number of sessions allowed by the roles of an account.
+ *
+ * @param user $account
+ *   The account to check the roles of.
+ *
+ * @return int
+ *   The maximum number of sessions the user is allowed by their roles.
+ */
 function session_limit_user_max_sessions_byrole($account) {
   $limits = array();
+
   foreach ($account->roles as $rid => $name) {
     $limits[] = variable_get("session_limit_rid_$rid", 0);
   }
 
   rsort($limits);
-  return check_plain($limits[0]);
+
+  return (int) $limits[0];
 }
 
 /**
