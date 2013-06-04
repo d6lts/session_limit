@@ -310,24 +310,7 @@ function session_limit_user_settings_submit($form, &$form_state) {
 function session_limit_page() {
   global $user;
 
-  if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
-    // Get the oldest sessions.
-    $count = db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = :uid", array(':uid' => $user->uid))->fetchField();
-    $max_sessions = $count - session_limit_user_max_sessions($user);
-
-    $result = db_select('sessions', 's')
-      ->condition('s.uid', $user->uid)
-      ->fields('s', array('sid'))
-      ->orderBy('timestamp', 'ASC')
-      ->range(0, $max_sessions)
-      ->execute();
-
-    foreach ($result as $session) {
-      session_limit_invoke_session_limit($session->sid, 'disconnect');
-    }
-    drupal_goto();
-  }
-  else if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
+  if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
     session_destroy();
     $user = drupal_anonymous_user();
 
@@ -456,7 +439,29 @@ function session_limit_invoke_session_limit($session, $op) {
 
   // In the event of a collision, redirect to session handler.
   if ($op == 'collision') {
-    drupal_goto('session/limit');
+    if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
+      global $user;
+
+      // Get the oldest sessions.
+      $count = db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = :uid", array(':uid' => $user->uid))->fetchField();
+      $max_sessions = $count - session_limit_user_max_sessions($user);
+
+      $result = db_select('sessions', 's')
+        ->condition('s.uid', $user->uid)
+        ->fields('s', array('sid'))
+        ->orderBy('timestamp', 'ASC')
+        ->range(0, $max_sessions)
+        ->execute();
+
+      foreach ($result as $session) {
+        session_limit_invoke_session_limit($session->sid, 'disconnect');
+      }
+    }
+    else {
+      // Otherwise re-direct to the session handler page so the user can
+      // choose which action they would like to take.
+      drupal_goto('session/limit');
+    }
   }
 
   return $return;
