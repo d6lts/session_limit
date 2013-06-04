@@ -314,7 +314,7 @@ class SessionLimitSessionTestCase extends SessionLimitBaseTestCase {
    */
   public function setUp() {
     // Enable any modules required for the test.
-    parent::setUp('session_limit', 'trigger');
+    parent::setUp('session_limit');
 
     // D6 simpletest has these variables commented out.
     $this->public_files_directory = variable_get('file_directory_path', '');
@@ -401,7 +401,7 @@ class SessionLimitLogoutTestCase extends SessionLimitBaseTestCase {
    */
   public function setUp() {
     // Enable any modules required for the test.
-    parent::setUp('session_limit', 'trigger');
+    parent::setUp('session_limit');
 
     // D6 simpletest has these variables commented out.
     $this->public_files_directory = variable_get('file_directory_path', '');
@@ -497,7 +497,7 @@ class SessionLimitPreventTestCase extends SessionLimitBaseTestCase {
    */
   public function setUp() {
     // Enable any modules required for the test.
-    parent::setUp('session_limit', 'trigger');
+    parent::setUp('session_limit');
 
     // D6 simpletest has these variables commented out.
     $this->public_files_directory = variable_get('file_directory_path', '');

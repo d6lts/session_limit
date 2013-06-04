@@ -380,17 +380,11 @@ function session_limit_page() {
 function session_limit_page_submit($form, &$form_state) {
   global $user;
 
-  // There used to be drupal_set_messages here for the disconnect,
-  // but now that there is trigger/action support built in, you can add
-  // a message through there and make it say whatever you want.
   if ($user->sid == $form_state['values']['sid']) {
-    // force a normal logout for ourself.
     drupal_goto('logout');
   }
   else {
     session_limit_invoke_session_limit($form_state['values']['sid'], 'disconnect');
-
-    // redirect to main page.
     drupal_goto();
   }
 }
@@ -454,22 +448,50 @@ function session_limit_user_max_sessions_byrole($account) {
 }
 
 /**
- * Implementation of hook_trigger_name().
+ * Limit a users access to the sites based on the current session.
+ *
+ * @param string $session
+ *   The session id string which identifies the current session.
+ * @param string $op
+ *   The action which caused the session limitation event. This is
+ *   either 'collision' or 'disconnect'.
+ *
+ * @return array
+ *   The results of all hook_session_limit functions.
+ *   Note that in a collision event, a Drupal goto is executed so
+ *   this function does not return.
+ */
+function session_limit_invoke_session_limit($session, $op) {
+  $return = array();
+
+  // Execute the hook_session_limit().
+  foreach (module_implements('session_limit') as $name) {
+    $function = $name .'_session_limit';
+    $result = $function($session, $op);
+    if (isset($result) && is_array($result)) {
+      $return = array_merge($return, $result);
+    }
+    elseif (isset($result)) {
+      $return[] = $result;
+    }
+  }
+
+  // In the event of a collision, redirect to session handler.
+  if ($op == 'collision') {
+    drupal_goto('session/limit');
+  }
+
+  return $return;
+}
+
+/**
+ * Implements hook_session_limit().
  */
 function session_limit_session_limit($sid, $op) {
-  $aids = _trigger_get_hook_aids('session_limit', $op);
-  $context = array(
-    'hook' => 'session_limit',
-    'op' => $op,
-    'sid' => $sid,
-  );
-  actions_do(array_keys($aids), $user, $context);
 
   switch ($op) {
     case 'collision':
       watchdog('session_limit', 'Exceeded maximum allowed active sessions.', array(), WATCHDOG_INFO);
-      // redirect to session handler.
-      drupal_goto('session/limit');
       break;
 
     case 'disconnect':
@@ -482,17 +504,27 @@ function session_limit_session_limit($sid, $op) {
   }
 }
 
-function session_limit_invoke_session_limit($session, $op) {
-  $return = array();
-  foreach (module_implements('session_limit') as $name) {
-    $function = $name .'_session_limit';
-    $result = $function($session, $op);
-    if (isset($result) && is_array($result)) {
-      $return = array_merge($return, $result);
-    }
-    elseif (isset($result)) {
-      $return[] = $result;
-    }
-  }
-  return $return;
+/**
+ * Implements hook_session_limit().
+ *
+ * This implements the hook on behalf of the trigger module.
+ */
+function trigger_session_limit($sid, $op) {
+  $aids = _trigger_get_hook_aids('session_limit', $op);
+  $context = array(
+    'hook' => 'session_limit',
+    'op' => $op,
+    'sid' => $sid,
+  );
+  actions_do(array_keys($aids), $user, $context);
+}
+
+/**
+ * Implements hook_session_limit().
+ *
+ * This implements the hook on behalf of the rules module.
+ */
+function rules_session_limit($sid, $op) {
+  global $user;
+  rules_invoke_event('session_limit_' . $op, $user, $sid);
 }
