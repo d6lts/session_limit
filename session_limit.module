@@ -398,9 +398,10 @@ function session_limit_user_max_sessions($account = NULL) {
  * @param user $account
  *   The user account to get the session limit for
  *
- * @return int|bool
- *   Maximum number of sessions or FALSE if no user
- *   specified value.
+ * @return int
+ *   Maximum number of sessions.
+ *   A value of 0 means that no user limit is set for the current user
+ *   and so the role limit should be used (or default if no role limit either).
  */
 function session_limit_user_max_sessions_byuser($account) {
   return (int) empty($account->data['session_limit']) ? 0 : $account->data['session_limit'];
@@ -414,6 +415,8 @@ function session_limit_user_max_sessions_byuser($account) {
  *
  * @return int
  *   The maximum number of sessions the user is allowed by their roles.
+ *   A value of 0 means that no role limit exists for this user and so
+ *   the default should be used.
  */
 function session_limit_user_max_sessions_byrole($account) {
   $limits = array();

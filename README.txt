@@ -18,6 +18,12 @@ sending an email, or redirecting to a different URL.
 
 Rules events are available for collision or disconnect events.
 
+The precedence of defined session limits are:
+
+1. The user's session limit if set, otherwise,
+2. The highest session limit for a user as set on their roles, if all are set to default then
+3. The system default session_limit
+
 Optional:
 ---------
 This module is able to use the token module for generating tokenized emails
