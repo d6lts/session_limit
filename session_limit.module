@@ -208,18 +208,23 @@ function session_limit_init() {
     if ((arg(0) == 'session' && arg(1) == 'limit') || (arg(0) == 'user' && arg(1) == 'logout')) {
       return;
     }
+
+    $query = db_select('sessions', 's')
+      // Use distict so that HTTP and HTTPS sessions
+      // are considered a single session.
+      ->distinct()
+      ->fields('s', array('sid'))
+      ->condition('s.uid', $user->uid);
+
     if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', FALSE)) {
-      $query = db_select('sessions', 's')->condition('s.uid', $user->uid);
       $query->leftJoin('masquerade', 'm', 's.uid = m.uid_as AND s.sid = m.sid');
       $query->isNull('m.sid');
-      $result = $query->countQuery()->execute()->fetchField();
-    }
-    else {
-      $result = db_select('sessions')->condition('uid', $user->uid)->countQuery()->execute()->fetchField();
     }
 
+    $active_sessions = $query->countQuery()->execute()->fetchField();
     $max_sessions = session_limit_user_max_sessions();
-    if (!empty($max_sessions) && $result > $max_sessions) {
+
+    if (!empty($max_sessions) && $active_sessions > $max_sessions) {
       session_limit_invoke_session_limit(session_id(), 'collision');
     }
     else {
@@ -326,7 +331,7 @@ function session_limit_page() {
         '%host' => $obj->hostname,
         '@message' => $message,
         '%time' => format_interval(time() - $obj->timestamp))
-    );
+      );
   }
   $form['sid'] = array(
     '#type' => 'radios',
@@ -480,19 +485,27 @@ function session_limit_invoke_session_limit($session, $op) {
     if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
       global $user;
 
-      // Get the oldest sessions.
-      $count = db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = :uid", array(':uid' => $user->uid))->fetchField();
-      $max_sessions = $count - session_limit_user_max_sessions($user);
+      // Get the number of sessions that should be removed.
+      $limit = db_query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
+        ':max_sessions' => session_limit_user_max_sessions($user),
+        ':uid' => $user->uid,
+      ))->fetchField();
 
-      $result = db_select('sessions', 's')
-        ->condition('s.uid', $user->uid)
-        ->fields('s', array('sid'))
-        ->orderBy('timestamp', 'ASC')
-        ->range(0, $max_sessions)
-        ->execute();
+      if ($limit > 0) {
+        // Secure session ids are seperate rows in the database, but we don't want to kick
+        // the user off there http session and not there https session or vice versa. This
+        // is why this query is DISTINCT. 
+        $result = db_select('sessions', 's')
+          ->distinct()
+          ->fields('s', array('sid'))
+          ->condition('s.uid', $user->uid)
+          ->orderBy('timestamp', 'ASC')
+          ->range(0, $limit)
+          ->execute();
 
-      foreach ($result as $session) {
-        session_limit_invoke_session_limit($session->sid, 'disconnect');
+        foreach ($result as $session) {
+          session_limit_invoke_session_limit($session->sid, 'disconnect');
+        }
       }
     }
     else {
