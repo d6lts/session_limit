@@ -157,7 +157,7 @@ function session_limit_settings_validate($form, &$form_state) {
  * Session limit role configuration form.
  */
 function session_limit_settings_byrole() {
-  $result = db_query('SELECT name, value FROM {variable} WHERE name LIKE "session_limit_rid_%" ORDER BY name');
+  $result = db_query("SELECT name, value FROM {variable} WHERE name LIKE 'session_limit_rid_%' ORDER BY name");
 
   while ($setting = db_fetch_object($result)) {
     $role_limits[$setting->name] = unserialize($setting->value);
@@ -180,7 +180,7 @@ function session_limit_settings_byrole() {
  * Session limit role configuration form validation.
  */
 function session_limit_settings_byrole_submit($form, &$form_state) {
-  db_query('DELETE FROM {variable} WHERE name LIKE "session_limit_rid_%"');
+  db_query("DELETE FROM {variable} WHERE name LIKE 'session_limit_rid_%'");
   foreach ($form_state['values'] as $setting_name => $setting_limit) {
     variable_set($setting_name, $setting_limit);
   }
