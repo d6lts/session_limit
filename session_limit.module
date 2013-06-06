@@ -105,6 +105,9 @@ function session_limit_menu() {
   return $items;
 }
 
+/**
+ * Session Limit settings form.
+ */
 function session_limit_settings() {
   $form['session_limit_max'] = array(
     '#type' => 'textfield',
@@ -137,6 +140,9 @@ function session_limit_settings() {
   return system_settings_form($form);
 }
 
+/**
+ * Session limit settings form validation.
+ */
 function session_limit_settings_validate($form, &$form_state) {
   $maxsessions = $form_state['values']['session_limit_max'];
   if (!is_numeric($maxsessions)) {
@@ -147,6 +153,9 @@ function session_limit_settings_validate($form, &$form_state) {
   }
 }
 
+/**
+ * Session limit role configuration form.
+ */
 function session_limit_settings_byrole() {
   $result = db_query('SELECT name, value FROM {variable} WHERE name LIKE "session_limit_rid_%" ORDER BY name');
 
@@ -167,6 +176,9 @@ function session_limit_settings_byrole() {
   return $form;
 }
 
+/**
+ * Session limit role configuration form validation.
+ */
 function session_limit_settings_byrole_submit($form, &$form_state) {
   db_query('DELETE FROM {variable} WHERE name LIKE "session_limit_rid_%"');
   foreach ($form_state['values'] as $setting_name => $setting_limit) {
@@ -196,27 +208,30 @@ function session_limit_init() {
     if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
       return;
     }
+
     if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', FALSE)) {
-      $result = db_query('SELECT COUNT(s.uid) FROM {sessions} AS s
+      $result = db_query('SELECT COUNT(DISTINCT(s.sid)) AS scount FROM {sessions} AS s
         LEFT JOIN {masquerade} AS m ON s.uid = m.uid_as AND s.sid = m.sid
         WHERE s.uid = %d AND m.sid IS NULL', $user->uid);
     }
     else {
-      $result = db_query('SELECT COUNT(*) FROM {sessions} WHERE uid = %d', $user->uid);
+      $result = db_query('SELECT COUNT(DISTINCT(sid)) AS scount FROM {sessions} WHERE uid = %d', $user->uid);
     }
 
     $max_sessions = session_limit_user_max_sessions();
-    if (!empty($max_sessions) && db_result($result) > $max_sessions) {
+    $active_sessions = db_result($result);
+
+    if (!empty($max_sessions) && $active_sessions > $max_sessions) {
       session_limit_invoke_session_limit(session_id(), 'collision');
     }
     else {
-      // force checking this twice as there's a race condition around session creation.
-      // see issue #1176412
+      // Force checking this twice as there's a race condition around session creation.
+      // see issue #1176412.
       if (!isset($_SESSION['session_limit_checkonce'])) {
         $_SESSION['session_limit_checkonce'] = TRUE;
       }
       else {
-        // mark session as verified to bypass this in future.
+        // Mark session as verified to bypass this in future.
         $_SESSION['session_limit'] = TRUE;
       }
     }
@@ -290,6 +305,9 @@ function session_limit_user($op, &$edit, &$account, $category = NULL) {
   }
 }
 
+/**
+ * User settings form.
+ */
 function session_limit_user_settings($args, $account) {
   $form['account'] = array(
     '#type' => 'value',
@@ -310,6 +328,9 @@ function session_limit_user_settings($args, $account) {
   return $form;
 }
 
+/**
+ * User settings form validation.
+ */
 function session_limit_user_settings_validate($form, &$form_state) {
   if (!is_numeric($form_state['values']['session_limit'])) {
     form_set_error('session_limit', t('Only numeric submissions are valid.'));
@@ -317,6 +338,9 @@ function session_limit_user_settings_validate($form, &$form_state) {
   }
 }
 
+/**
+ * User settings form submission.
+ */
 function session_limit_user_settings_submit($form, &$form_state) {
   watchdog('session_limit', 'Maximum sessions for @user updated to @count.', array('@user' => $form_state['values']['account']->name, '@count' => $form_state['values']['session_limit']), WATCHDOG_INFO, l(t('view'), "user/{$form_state['values']['account']->uid}"));
   if (empty($form_state['values']['session_limit'])) {
@@ -327,7 +351,7 @@ function session_limit_user_settings_submit($form, &$form_state) {
 }
 
 /**
- * Display/Delete sessions..
+ * Display/Delete sessions.
  */
 function session_limit_page() {
   global $user;
@@ -349,15 +373,18 @@ function session_limit_page() {
         '%time' => format_interval(time() - $obj->timestamp))
     );
   }
+
   $form['sid'] = array(
     '#type' => 'radios',
     '#title' => t('Select a session to disconnect.'),
     '#options' => $sids,
   );
+
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Disconnect session'),
   );
+
   return $form;
 }
 
@@ -376,6 +403,9 @@ function session_limit_page_submit($form, &$form_state) {
   }
 }
 
+/**
+ * Helper function for formatting the settings option form.
+ */
 function _session_limit_user_options() {
   $options = drupal_map_assoc(range(0, 250));
   $options[0] = t('Default');
@@ -500,18 +530,21 @@ function session_limit_invoke_session_limit($session, $op) {
     }
   }
 
-  // In the event of a collision, redirect to session handler.
+  // In the event of a collision, close oldest sessions.
   if ($op == 'collision') {
     if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
       global $user;
 
-      // Get the oldest sessions.
-      $count = db_result(db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = %d", $user->uid));
-      $max_sessions = $count - session_limit_user_max_sessions($user);
-      $result = db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, $max_sessions);
+      // Get the number of sessions that should be removed.
+      $count = db_result(db_query("SELECT COUNT(DISTINCT(sid)) FROM {sessions} WHERE uid = %d", $user->uid));
+      $limit = $count - session_limit_user_max_sessions($user);
 
-      while ($sids = db_fetch_object($result)) {
-        session_limit_invoke_session_limit($sids->sid, 'disconnect');
+      if ($limit > 0) {
+        $result = db_query_range("SELECT DISTINCT(sid) as sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, $limit);
+
+        while ($sids = db_fetch_object($result)) {
+          session_limit_invoke_session_limit($sids->sid, 'disconnect');
+        }
       }
     }
     else {
