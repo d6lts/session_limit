@@ -332,22 +332,9 @@ function session_limit_user_settings_submit($form, &$form_state) {
 function session_limit_page() {
   global $user;
 
-  if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
-    // Get the oldest sessions.
-    $count = db_result(db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = %d", $user->uid));
-    $max_sessions = $count - session_limit_user_max_sessions($user);
-    $result = db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, $max_sessions);
-
-    while ($sids = db_fetch_object($result)) {
-      session_limit_invoke_session_limit($sids->sid, 'disconnect');
-    }
-
-    drupal_goto();
-  }
-  else if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
+  if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
     session_destroy();
     $user = drupal_anonymous_user();
-
     return;
   }
 
@@ -515,7 +502,21 @@ function session_limit_invoke_session_limit($session, $op) {
 
   // In the event of a collision, redirect to session handler.
   if ($op == 'collision') {
-    drupal_goto('session/limit');
+    if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
+      global $user;
+
+      // Get the oldest sessions.
+      $count = db_result(db_query("SELECT COUNT(sid) FROM {sessions} WHERE uid = %d", $user->uid));
+      $max_sessions = $count - session_limit_user_max_sessions($user);
+      $result = db_query_range("SELECT sid FROM {sessions} WHERE uid = %d ORDER BY timestamp", $user->uid, 0, $max_sessions);
+
+      while ($sids = db_fetch_object($result)) {
+        session_limit_invoke_session_limit($sids->sid, 'disconnect');
+      }
+    }
+    else {
+      drupal_goto('session/limit');
+    }
   }
 
   return $return;
