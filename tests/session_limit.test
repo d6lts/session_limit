@@ -63,6 +63,7 @@ class SessionLimitBaseTestCase extends DrupalWebTestCase {
   public function assertSessionLogout($session_limit, stdClass $user = NULL) {
     // Set the session limit behaviour to log out of old sessions.
     variable_set('session_limit_behaviour', 1);
+    variable_set('session_limit_logged_out_message', 'Reached limit @number.');
 
     // Create the user to test with.
     $user = empty($user) ? $this->drupalCreateUser(array('access content')) : $user;
@@ -106,7 +107,7 @@ class SessionLimitBaseTestCase extends DrupalWebTestCase {
     $this->drupalGet('node');
     $this->assertNoText(t('Log out'), t('User 1 is not logged in under session 1.'));
 
-    $this->assertText(t('You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @limit simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.', array('@limit' => $session_limit)), t('User was shown message about being logged out due to too many sessions'));
+    $this->assertText(t('Reached limit @number.', array('@number' => $session_limit)), t('User was shown session limit message.'));
 
     // Check user 1 is logged in on all other sessions.
     foreach ($sessions as $session_number => $session_id) {

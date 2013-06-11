@@ -21,6 +21,15 @@ define('SESSION_LIMIT_DROP', 1);
 define('SESSION_LIMIT_DISALLOW_NEW', 2);
 
 /**
+ * Default drupal_set_message type for logout message.
+ */
+define('SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY', 'error');
+
+/**
+ * Default message displayed when a user is logged out.
+ */
+define('SESSION_LIMIT_LOGGED_OUT_MESSAGE', 'You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.');
+/**
  * Implements hook_help().
  */
 function session_limit_help($path, $args) {
@@ -116,17 +125,20 @@ function session_limit_settings() {
     '#maxlength' => 3,
     '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
   );
+
   $limit_behaviours = array(
     SESSION_LIMIT_DO_NOTHING => t('Do nothing.'),
     SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
     SESSION_LIMIT_DISALLOW_NEW => t('Prevent new session.'),
   );
+
   $form['session_limit_behaviour'] = array(
     '#type' => 'radios',
     '#title' => t('When the session limit is exceeded'),
     '#default_value' => variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING),
     '#options' => $limit_behaviours,
   );
+
   if (module_exists('masquerade')) {
     $form['session_limit_masquerade_ignore'] = array(
       '#type' => 'checkbox',
@@ -135,10 +147,33 @@ function session_limit_settings() {
       '#default_value' => variable_get('session_limit_masquerade_ignore', FALSE),
     );
   }
+  $form['session_limit_logged_out_message_severity'] = array(
+    '#type' => 'select',
+    '#title' => t('Logged out message severity'),
+    '#default_value' => variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY),
+    '#options' => array(
+      'error' => t('Error'),
+      'warning' => t('Warning'),
+      'status' => t('Status'),
+      '_none' => t('No Message'),
+    ),
+    '#description' => t('The Drupal message type.  Defaults to Error.'),
+  );
+
+  $form['session_limit_logged_out_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Logged out message'),
+    '#default_value' => variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE),
+    '#description' => t('The message that is displayed to a user if the workstation has been logged out.<br />
+      @number is replaced with the maximum number of simultaneous sessions.'),
+  );
 
   return system_settings_form($form);
 }
 
+/**
+ * Settings validation form.
+ */
 function session_limit_settings_validate($form, &$form_state) {
   $maxsessions = $form_state['values']['session_limit_max'];
   if (!is_numeric($maxsessions)) {
@@ -149,6 +184,9 @@ function session_limit_settings_validate($form, &$form_state) {
   }
 }
 
+/**
+ * Settings by role form.
+ */
 function session_limit_settings_byrole() {
   $result = db_select('variable', 'v')
     ->fields('v', array('name', 'value'))
@@ -169,13 +207,18 @@ function session_limit_settings_byrole() {
       '#default_value' => empty($role_limits["session_limit_rid_$rid"]) ? 0 : $role_limits["session_limit_rid_$rid"],
     );
   }
+
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save permissions'),
   );
+
   return $form;
 }
 
+/**
+ * Set session limits by role form submission.
+ */
 function session_limit_settings_byrole_submit($form, &$form_state) {
   db_delete('variable')
     ->condition('name', 'session_limit_rid_%', 'LIKE')
@@ -184,6 +227,7 @@ function session_limit_settings_byrole_submit($form, &$form_state) {
   foreach ($form_state['values'] as $setting_name => $setting_limit) {
     variable_set($setting_name, $setting_limit);
   }
+
   drupal_set_message(t('Role settings updated.'), 'status');
   watchdog('session_limit', 'Role limits updated.', array(), WATCHDOG_INFO);
 }
@@ -272,6 +316,9 @@ function session_limit_user_view($account, $view_mode) {
   }
 }
 
+/**
+ * Session limit user settings form.
+ */
 function session_limit_user_settings($form, $form_state, $account) {
   $form['account'] = array(
     '#type' => 'value',
@@ -293,6 +340,9 @@ function session_limit_user_settings($form, $form_state, $account) {
   return $form;
 }
 
+/**
+ * Session limit user settings form validation.
+ */
 function session_limit_user_settings_validate($form, &$form_state) {
   if (!is_numeric($form_state['values']['session_limit'])) {
     form_set_error('session_limit', t('Only numeric submissions are valid.'));
@@ -300,6 +350,9 @@ function session_limit_user_settings_validate($form, &$form_state) {
   }
 }
 
+/**
+ * Session limit user settings form submission.
+ */
 function session_limit_user_settings_submit($form, &$form_state) {
   watchdog('session_limit', 'Maximum sessions for @user updated to @count.', array('@user' => $form_state['values']['account']->name, '@count' => $form_state['values']['session_limit']), WATCHDOG_INFO, l(t('view'), "user/{$form_state['values']['account']->uid}"));
   if (empty($form_state['values']['session_limit'])) {
@@ -310,7 +363,7 @@ function session_limit_user_settings_submit($form, &$form_state) {
 }
 
 /**
- * Display/Delete sessions..
+ * Display or delete sessions form.
  */
 function session_limit_page() {
   global $user;
@@ -333,15 +386,18 @@ function session_limit_page() {
         '%time' => format_interval(time() - $obj->timestamp))
       );
   }
+
   $form['sid'] = array(
     '#type' => 'radios',
     '#title' => t('Select a session to disconnect.'),
     '#options' => $sids,
   );
+
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Disconnect session'),
   );
+
   return $form;
 }
 
@@ -358,6 +414,9 @@ function session_limit_page_submit($form, &$form_state) {
   }
 }
 
+/**
+ * Helper function for populating the values of the settings form select.
+ */
 function _session_limit_user_options() {
   $options = drupal_map_assoc(range(0, 250));
   $options[0] = t('Default');
@@ -528,13 +587,19 @@ function session_limit_session_limit($sid, $op) {
       break;
 
     case 'disconnect':
-      $logout_message = t('You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.', array('@number' => session_limit_user_max_sessions()));
-      $logout_message = 'messages|' . serialize(array('error' => array($logout_message)));
+      $message = variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE);
+      $message_severity = variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY);
+      $fields['session'] = '';
+
+      if ($message_severity != '_none' && !empty($message)) {
+        $logout_message = t($message, array('@number' => session_limit_user_max_sessions()));
+        $logout_message = 'messages|' . serialize(array($message_severity => array($logout_message)));
+        $fields['session'] = $logout_message;
+      }
+
+      $fields['uid'] = 0;
       $query = db_update('sessions')
-        ->fields(array(
-          'uid' => 0,
-          'session' => $logout_message,
-        ))
+        ->fields($fields)
         ->condition('sid', $sid)
         ->execute();
 
