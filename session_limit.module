@@ -21,6 +21,16 @@ define('SESSION_LIMIT_DROP', 1);
 define('SESSION_LIMIT_DISALLOW_NEW', 2);
 
 /**
+ * Default drupal_set_message type for logout message.
+ */
+define('SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY', 'error');
+
+/**
+ * Default message displayed when a user is logged out.
+ */
+define('SESSION_LIMIT_LOGGED_OUT_MESSAGE', 'You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.');
+
+/**
  * Implementation of hook_help().
  */
 function session_limit_help($path, $args) {
@@ -136,6 +146,25 @@ function session_limit_settings() {
       '#default_value' => variable_get('session_limit_masquerade_ignore', FALSE)
     );
   }
+  $form['session_limit_logged_out_message_severity'] = array(
+    '#type' => 'select',
+    '#title' => t('Logged out message severity'),
+    '#default_value' => variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY),
+    '#options' => array(
+      'error' => t('Error'),
+      'warning' => t('Warning'),
+      'status' => t('Status'),
+      '_none' => t('No Message'),
+    ),
+    '#description' => t('The Drupal message type.  Defaults to Error.'),
+  );
+  $form['session_limit_logged_out_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Logged out message'),
+    '#default_value' => variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE),
+    '#description' => t('The message that is displayed to a user if the workstation has been logged out.<br />
+      @number is replaced with the maximum number of simultaneous sessions.'),
+  );
 
   return system_settings_form($form);
 }
@@ -566,10 +595,15 @@ function session_limit_session_limit($sid, $op) {
       break;
 
     case 'disconnect':
-      $logout_message = t('You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.', array('@number' => session_limit_user_max_sessions()));
-      $logout_message = 'messages|'. serialize(array('error' => array($logout_message)));
-      db_query("UPDATE {sessions} SET uid = 0, session = '%s' WHERE sid = '%s'", $logout_message, $sid);
+      $message = variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE);
+      $message_severity = variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY);
 
+      if ($message_severity != '_none' && !empty($message)) {
+        $logout_message = t($message, array('@number' => session_limit_user_max_sessions()));
+        $logout_message = 'messages|' . serialize(array($message_severity => array($logout_message)));
+      }
+
+      db_query("UPDATE {sessions} SET uid = 0, session = '%s' WHERE sid = '%s'", $logout_message, $sid);
       watchdog('session_limit', 'Disconnected for excess active sessions.', array(), WATCHDOG_NOTICE);
       break;
   }
