@@ -643,7 +643,7 @@ function rules_session_limit($sid, $op) {
  *   TRUE if the page request should bypass session limitation restrictions.
  */
 function session_limit_session_limit_bypass() {
-  if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
+  if ((arg(0) == 'session' && arg(1) == 'limit') || (arg(0) == 'user' && arg(1) == 'logout')) {
     return TRUE;
   }
 }
