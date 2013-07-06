@@ -234,8 +234,9 @@ function session_limit_init() {
   if ($user->uid > 1 && !isset($_SESSION['session_limit'])) {
 
     // Exclude from the redirect.
-    if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
-      return;
+    if (_session_limit_bypass()) {
+      // Bypass the session limitation on this page callback.
+       return;
     }
 
     if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', FALSE)) {
@@ -632,4 +633,34 @@ function trigger_session_limit($sid, $op) {
 function rules_session_limit($sid, $op) {
   global $user;
   rules_invoke_event('session_limit_' . $op, $user, $sid);
+}
+
+/**
+ * Implements hook_session_limit_bypass().
+ *
+ * @return bool
+ *   TRUE if the page request should bypass session limitation restrictions.
+ */
+function session_limit_session_limit_bypass() {
+  if ((arg(0) == 'session' && arg(1) == 'limit') || arg(0) == 'logout') {
+    return TRUE;
+  }
+}
+
+/**
+ * Execute the session limit bypass hook.
+ *
+ * Allow other modules to prevent session limits in their own requirements.
+ *
+ * @return bool
+ *   TRUE if session limitation should be bypassed.
+ */
+function _session_limit_bypass() {
+  foreach (module_invoke_all('session_limit_bypass') as $bypass) {
+    if (!empty($bypass)) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
