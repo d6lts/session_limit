@@ -28,8 +28,6 @@ class SessionLimitTest extends WebTestBase {
   /**
    * A store references to different sessions.
    */
-  protected $curlHandles = array();
-  protected $loggedInUsers = array();
 
   /**
    * getInfo() returns properties that are displayed in the test selection form.

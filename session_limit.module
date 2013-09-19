@@ -29,6 +29,7 @@ define('SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY', 'error');
  * Default message displayed when a user is logged out.
  */
 define('SESSION_LIMIT_LOGGED_OUT_MESSAGE', 'You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.');
+
 /**
  * Implements hook_help().
  */
@@ -75,6 +76,7 @@ function session_limit_menu() {
     'access callback' => 'user_is_logged_in',
     'type' => MENU_CALLBACK,
   );
+
   $items['mysessions'] = array(
     'title' => 'My sessions',
     'page callback' => 'drupal_get_form',
@@ -82,29 +84,19 @@ function session_limit_menu() {
     'access callback' => 'user_is_logged_in',
     'type' => MENU_SUGGESTED_ITEM,
   );
+
   $items['admin/config/people/session_limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limits.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('session_limit_settings'),
-    'access arguments' => array('administer site configuration'),
-    'type' => MENU_NORMAL_ITEM,
+    'route_name' => 'session_limit.settings',
   );
-  $items['admin/config/people/session_limit/defaults'] = array(
-    'title' => 'Defaults',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('session_limit_settings'),
-    'access arguments' => array('administer site configuration'),
-    'type' => MENU_DEFAULT_LOCAL_TASK,
-  );
+
   $items['admin/config/people/session_limit/roles'] = array(
     'title' => 'Role limits',
     'description' => 'Configure session limits by role.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('session_limit_settings_byrole'),
-    'access arguments' => array('administer session limits by role'),
-    'type' => MENU_LOCAL_TASK,
+    'route_name' => 'session_limit.role_settings',
   );
+
   $items['user/%user/session_limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limit for one user.',
@@ -113,107 +105,8 @@ function session_limit_menu() {
     'access arguments' => array('administer session limits per user'),
     'type' => MENU_LOCAL_TASK,
   );
+
   return $items;
-}
-
-function session_limit_settings() {
-  $form['session_limit_max'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Default maximum number of active sessions'),
-    '#default_value' => variable_get('session_limit_max', 1),
-    '#size' => 2,
-    '#maxlength' => 3,
-    '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
-  );
-
-  $limit_behaviours = array(
-    SESSION_LIMIT_DO_NOTHING => t('Do nothing.'),
-    SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
-    SESSION_LIMIT_DISALLOW_NEW => t('Prevent new session.'),
-  );
-
-  $form['session_limit_behaviour'] = array(
-    '#type' => 'radios',
-    '#title' => t('When the session limit is exceeded'),
-    '#default_value' => variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING),
-    '#options' => $limit_behaviours,
-  );
-
-  if (module_exists('masquerade')) {
-    $form['session_limit_masquerade_ignore'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Ignore masqueraded sessions.'),
-      '#description' => t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
-      '#default_value' => variable_get('session_limit_masquerade_ignore', FALSE),
-    );
-  }
-  $form['session_limit_logged_out_message_severity'] = array(
-    '#type' => 'select',
-    '#title' => t('Logged out message severity'),
-    '#default_value' => variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY),
-    '#options' => array(
-      'error' => t('Error'),
-      'warning' => t('Warning'),
-      'status' => t('Status'),
-      '_none' => t('No Message'),
-    ),
-    '#description' => t('The Drupal message type.  Defaults to Error.'),
-  );
-
-  $form['session_limit_logged_out_message'] = array(
-    '#type' => 'textarea',
-    '#title' => t('Logged out message'),
-    '#default_value' => variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE),
-    '#description' => t('The message that is displayed to a user if the workstation has been logged out.<br />
-      @number is replaced with the maximum number of simultaneous sessions.'),
-  );
-
-  return system_settings_form($form);
-}
-
-/**
- * Settings validation form.
- */
-function session_limit_settings_validate($form, &$form_state) {
-  $maxsessions = $form_state['values']['session_limit_max'];
-  if (!is_numeric($maxsessions)) {
-    form_set_error('session_limit_max', t('You must enter a number for the maximum number of active sessions'));
-  }
-  elseif ($maxsessions < 0) {
-    form_set_error('session_limit_max', t('Maximum number of active sessions must be positive'));
-  }
-}
-
-/**
- * Settings by role form.
- */
-function session_limit_settings_byrole() {
-  $result = db_select('variable', 'v')
-    ->fields('v', array('name', 'value'))
-    ->condition('name', 'session_limit_rid_%', 'LIKE')
-    ->orderBy('name')
-    ->execute();
-
-  foreach ($result as $setting) {
-    $role_limits[$setting->name] = unserialize($setting->value);
-  }
-
-  $roles = user_roles(TRUE);
-  foreach ($roles as $rid => $role) {
-    $form["session_limit_rid_$rid"] = array(
-      '#type' => 'select',
-      '#options' => _session_limit_user_options(),
-      '#title' => check_plain($role),
-      '#default_value' => empty($role_limits["session_limit_rid_$rid"]) ? 0 : $role_limits["session_limit_rid_$rid"],
-    );
-  }
-
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Save permissions'),
-  );
-
-  return $form;
 }
 
 /**
