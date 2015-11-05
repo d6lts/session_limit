@@ -665,3 +665,31 @@ function _session_limit_bypass() {
 
   return FALSE;
 }
+
+/**
+ * Implements hook_variable_group_info().
+ */
+function session_limit_variable_group_info() {
+  $groups['session_limit'] = array(
+    'title' => t('Session limit'),
+    'access' => 'administer site configuration',
+    'path' => array('admin/config/people/session_limit/defaults'),
+  );
+  return $groups;
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function session_limit_variable_info($options) {
+  $variables['session_limit_logged_out_message'] = array(
+    'title' => t('Logged out message', array(), $options),
+    'description' =>  t('The message that is displayed to a user if the workstation has been logged out.<br />
+      @number is replaced with the maximum number of simultaneous sessions.', array(), $options),
+    'type' => 'string',
+    'localize' => TRUE,
+    'group' => 'session_limit',
+  );
+
+  return $variables;
+}
