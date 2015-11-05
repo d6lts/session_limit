@@ -83,7 +83,7 @@ function session_limit_menu() {
     'access callback' => 'user_is_logged_in',
     'type' => MENU_SUGGESTED_ITEM,
   );
-  $items['admin/config/people/session_limit'] = array(
+  $items['admin/config/people/session-limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limits.',
     'page callback' => 'drupal_get_form',
@@ -98,7 +98,7 @@ function session_limit_menu() {
     'access arguments' => array('administer site configuration'),
     'type' => MENU_DEFAULT_LOCAL_TASK,
   );
-  $items['admin/config/people/session_limit/roles'] = array(
+  $items['admin/config/people/session-limit/roles'] = array(
     'title' => 'Role limits',
     'description' => 'Configure session limits by role.',
     'page callback' => 'drupal_get_form',
@@ -106,7 +106,7 @@ function session_limit_menu() {
     'access arguments' => array('administer session limits by role'),
     'type' => MENU_LOCAL_TASK,
   );
-  $items['user/%user/session_limit'] = array(
+  $items['user/%user/session-limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limit for one user.',
     'page callback' => 'drupal_get_form',
