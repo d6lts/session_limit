@@ -487,12 +487,14 @@ function session_limit_user_max_sessions_byrole($account) {
   $limits = array();
 
   foreach ($account->roles as $rid => $name) {
-    $limits[] = variable_get("session_limit_rid_$rid", 0);
+    $role_limit = variable_get("session_limit_rid_$rid", FALSE);
+
+    if (!empty($role_limit)) {
+      $limits[] = (int) $role_limit;
+    }
   }
 
-  rsort($limits);
-
-  return (int) $limits[0];
+  return empty($limits) ? 0 : max($limits);
 }
 
 /**
@@ -554,7 +556,7 @@ function session_limit_invoke_session_limit($session, $op) {
       if ($limit > 0) {
         // Secure session ids are seperate rows in the database, but we don't want to kick
         // the user off there http session and not there https session or vice versa. This
-        // is why this query is DISTINCT. 
+        // is why this query is DISTINCT.
         $result = db_select('sessions', 's')
           ->distinct()
           ->fields('s', array('sid'))
