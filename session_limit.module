@@ -312,7 +312,9 @@ function session_limit_user_view($account, $view_mode) {
     $account->content['session_limit'] = array(
       '#title' => t('Session limit'),
       '#type' => 'user_profile_category',
-      'session_limit' => array('#value' => empty($account->data['session_limit']) ? t('Default') : $account->data['session_limit'])
+      'session_limit' => array(
+        '#markup' => empty($account->data['session_limit']) ? t('Default') : $account->data['session_limit'],
+      )
     );
   }
 }
