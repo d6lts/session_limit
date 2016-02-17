@@ -68,6 +68,31 @@ class SettingsForm extends ConfigFormBase {
       '#description' => t('The Drupal message type.  Defaults to Error.'),
     ];
 
+    $role_limits = \Drupal::config('session_limit.settings')->get('session_limit_roles');
+
+    $form['session_limit_roles'] = [
+      '#type' => 'fieldset',
+      '#title' => t('Role limits'),
+      '#description' => t('Optionally, specify session limits by role.'),
+    ];
+
+    foreach (user_roles(TRUE) as $rid => $role) {
+      $form['session_limit_roles'][$rid] = [
+        '#type' => 'select',
+        '#options' => [
+          -1 => t('Uses default'),
+          0 => t('No limits'),
+          1,
+          2,
+          3,
+          4,
+          5,
+        ],
+        '#title' => $role->label(),
+        '#default_value' => empty($role_limits[$rid]) ? 0 : $role_limits[$rid],
+      ];
+    }
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -90,9 +115,21 @@ class SettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $config = $this->config('session_limit.settings');
 
-    foreach (Element::children($form) as $variable) {
-      $config->set($variable, $form_state->getValue($form[$variable]['#parents']));
+    $config->set('session_limit_max', $form_state->getValue($form['session_limit_max']['#parents']));
+    $config->set('session_limit_behaviour', $form_state->getValue($form['session_limit_behaviour']['#parents']));
+    $config->set('session_limit_logged_out_message_severity', $form_state->getValue($form['session_limit_logged_out_message_severity']['#parents']));
+
+    $role_limits = [];
+    foreach (user_roles(TRUE) as $rid => $role) {
+      $role_limits[$rid] = $form_state->getValue($form['session_limit_roles'][$rid]['#parents']);
     }
+
+    $config->set('session_limit_roles', $role_limits);
+
+    if (!empty($form['session_limit_masquerade_ignore'])) {
+      $config->set('session_limit_masquerade_ignore', $form_state->getValue($form['session_limit_masquerade_ignore']['#parents']));
+    }
+
     $config->save();
 
     if (method_exists($this, '_submitForm')) {
