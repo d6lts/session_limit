@@ -36,7 +36,7 @@ define('SESSION_LIMIT_LOGGED_OUT_MESSAGE', 'You have been automatically logged o
 function session_limit_help($path, $args) {
   switch ($path) {
     case 'admin/help#session_limit':
-      $output = '<p>' . t("The two major notice messages to users are passed through Drupal's t() function. This maintains locale support, allowing you to override strings in any language, but such text is also available to be changed through other modules like !stringoverridesurl.", array('!stringoverridesurl' => l('String Overrides', 'http://drupal.org/project/stringoverrides'))) . '</p>';
+      $output = '<p>' . t("The two major notice messages to users are passed through Drupal's t() function. This maintains locale support, allowing you to override strings in any language, but such text is also available to be changed through other modules like !stringoverridesurl.", array('!stringoverridesurl' => \Drupal::l('String Overrides', \Drupal\Core\Url::fromUri('http://drupal.org/project/stringoverrides')))) . '</p>';
       $output .= '<p>' . t("The two major strings are as follows:") . '</p>';
       $output .= '<p><blockquote>';
       $output .=  'The maximum number of simultaneous sessions (@number) for your account has been reached. You did not log off from a previous session or someone else is logged on to your account. This may indicate that your account has been compromised or that account sharing is limited on this site. Please contact the site administrator if you suspect your account has been compromised.';
@@ -76,7 +76,6 @@ function session_limit_menu() {
     'access callback' => 'user_is_logged_in',
     'type' => MENU_CALLBACK,
   );
-
   $items['mysessions'] = array(
     'title' => 'My sessions',
     'page callback' => 'drupal_get_form',
@@ -84,20 +83,30 @@ function session_limit_menu() {
     'access callback' => 'user_is_logged_in',
     'type' => MENU_SUGGESTED_ITEM,
   );
-
-  $items['admin/config/people/session_limit'] = array(
+  $items['admin/config/people/session-limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limits.',
-    'route_name' => 'session_limit.settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
   );
-
-  $items['admin/config/people/session_limit/roles'] = array(
+  $items['admin/config/people/session_limit/defaults'] = array(
+    'title' => 'Defaults',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/people/session-limit/roles'] = array(
     'title' => 'Role limits',
     'description' => 'Configure session limits by role.',
-    'route_name' => 'session_limit.role_settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('session_limit_settings_byrole'),
+    'access arguments' => array('administer session limits by role'),
+    'type' => MENU_LOCAL_TASK,
   );
-
-  $items['user/%user/session_limit'] = array(
+  $items['user/%user/session-limit'] = array(
     'title' => 'Session limit',
     'description' => 'Configure session limit for one user.',
     'page callback' => 'drupal_get_form',
@@ -105,24 +114,144 @@ function session_limit_menu() {
     'access arguments' => array('administer session limits per user'),
     'type' => MENU_LOCAL_TASK,
   );
-
   return $items;
+}
+
+function session_limit_settings() {
+  $form['session_limit_max'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default maximum number of active sessions'),
+    '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_max'),
+    '#size' => 2,
+    '#maxlength' => 3,
+    '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
+  );
+
+  $limit_behaviours = array(
+    SESSION_LIMIT_DO_NOTHING => t('Do nothing.'),
+    SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
+    SESSION_LIMIT_DISALLOW_NEW => t('Prevent new session.'),
+  );
+
+  // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+$form['session_limit_behaviour'] = array(
+    '#type' => 'radios',
+    '#title' => t('When the session limit is exceeded'),
+    '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_behaviour'),
+    '#options' => $limit_behaviours,
+  );
+
+  if (\Drupal::moduleHandler()->moduleExists('masquerade')) {
+    $form['session_limit_masquerade_ignore'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Ignore masqueraded sessions.'),
+      '#description' => t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
+      '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_masquerade_ignore'),
+    );
+  }
+  // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+$form['session_limit_logged_out_message_severity'] = array(
+    '#type' => 'select',
+    '#title' => t('Logged out message severity'),
+    '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_logged_out_message_severity'),
+    '#options' => array(
+      'error' => t('Error'),
+      'warning' => t('Warning'),
+      'status' => t('Status'),
+      '_none' => t('No Message'),
+    ),
+    '#description' => t('The Drupal message type.  Defaults to Error.'),
+  );
+
+  // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+$form['session_limit_logged_out_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Logged out message'),
+    '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_logged_out_message'),
+    '#description' => t('The message that is displayed to a user if the workstation has been logged out.<br />
+      @number is replaced with the maximum number of simultaneous sessions.'),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Settings validation form.
+ */
+function session_limit_settings_validate($form, &$form_state) {
+  $maxsessions = $form_state['values']['session_limit_max'];
+  if (!is_numeric($maxsessions)) {
+    form_set_error('session_limit_max', t('You must enter a number for the maximum number of active sessions'));
+  }
+  elseif ($maxsessions < 0) {
+    form_set_error('session_limit_max', t('Maximum number of active sessions must be positive'));
+  }
+}
+
+/**
+ * Settings by role form.
+ */
+function session_limit_settings_byrole() {
+  // @FIXME
+// $result = db_select('variable', 'v')
+//     ->fields('v', array('name', 'value'))
+//     ->condition('name', 'session_limit_rid_%', 'LIKE')
+//     ->orderBy('name')
+//     ->execute();
+
+
+  foreach ($result as $setting) {
+    $role_limits[$setting->name] = unserialize($setting->value);
+  }
+
+  $roles = user_roles(TRUE);
+  foreach ($roles as $rid => $role) {
+    $form["session_limit_rid_$rid"] = array(
+      '#type' => 'select',
+      '#options' => _session_limit_user_options(),
+      '#title' => \Drupal\Component\Utility\SafeMarkup::checkPlain($role),
+      '#default_value' => empty($role_limits["session_limit_rid_$rid"]) ? 0 : $role_limits["session_limit_rid_$rid"],
+    );
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save permissions'),
+  );
+
+  return $form;
 }
 
 /**
  * Set session limits by role form submission.
  */
 function session_limit_settings_byrole_submit($form, &$form_state) {
-  db_delete('variable')
-    ->condition('name', 'session_limit_rid_%', 'LIKE')
-    ->execute();
+  // @FIXME
+// db_delete('variable')
+//     ->condition('name', 'session_limit_rid_%', 'LIKE')
+//     ->execute();
+
 
   foreach ($form_state['values'] as $setting_name => $setting_limit) {
-    variable_set($setting_name, $setting_limit);
+    // @FIXME
+// // @FIXME
+// // The correct configuration object could not be determined. You'll need to
+// // rewrite this call manually.
+// variable_set($setting_name, $setting_limit);
+
   }
 
   drupal_set_message(t('Role settings updated.'), 'status');
-  watchdog('session_limit', 'Role limits updated.', array(), WATCHDOG_INFO);
+  \Drupal::logger('session_limit')->info('Role limits updated.', array());
 }
 
 /**
@@ -138,11 +267,11 @@ function session_limit_settings_byrole_submit($form, &$form_state) {
  * browse to a different page after their login has validated.
  */
 function session_limit_init() {
-  global $user;
+  $user = \Drupal::currentUser();
   if ($user->uid > 1 && !isset($_SESSION['session_limit'])) {
 
-    // Exclude from the redirect.
-    if ((arg(0) == 'session' && arg(1) == 'limit') || (arg(0) == 'user' && arg(1) == 'logout')) {
+    if (_session_limit_bypass()) {
+      // Bypass the session limitation on this page callback.
       return;
     }
 
@@ -153,7 +282,7 @@ function session_limit_init() {
       ->fields('s', array('sid'))
       ->condition('s.uid', $user->uid);
 
-    if (module_exists('masquerade') && variable_get('session_limit_masquerade_ignore', FALSE)) {
+    if (\Drupal::moduleHandler()->moduleExists('masquerade') && \Drupal::config('session_limit.settings')->get('session_limit_masquerade_ignore')) {
       $query->leftJoin('masquerade', 'm', 's.uid = m.uid_as AND s.sid = m.sid');
       $query->isNull('m.sid');
     }
@@ -182,7 +311,7 @@ function session_limit_init() {
  * Implements hook_action_info_alter().
  */
 function session_limit_action_info_alter(&$info) {
-  if (module_exists('token_actions')) {
+  if (\Drupal::moduleHandler()->moduleExists('token_actions')) {
     foreach ($info as $type => $data) {
       if (stripos($type, "token_actions_") === 0 || stripos($type, "system_") === 0) {
         if (isset($info[$type]['hooks']['session_limit'])) {
@@ -199,12 +328,14 @@ function session_limit_action_info_alter(&$info) {
 /**
  * Implements hook_user_view().
  */
-function session_limit_user_view($account, $view_mode) {
-  if (user_access('administer session limits per user')) {
+function session_limit_user_view(array &$build, \Drupal\user\UserInterface $account, $view_mode) {
+  if (\Drupal::currentUser()->hasPermission('administer session limits per user')) {
     $account->content['session_limit'] = array(
       '#title' => t('Session limit'),
       '#type' => 'user_profile_category',
-      'session_limit' => array('#value' => empty($account->data['session_limit']) ? t('Default') : $account->data['session_limit'])
+      'session_limit' => array(
+        '#markup' => empty($account->data['session_limit']) ? t('Default') : $account->data['session_limit'],
+      )
     );
   }
 }
@@ -239,7 +370,7 @@ function session_limit_user_settings($form, $form_state, $account) {
 function session_limit_user_settings_validate($form, &$form_state) {
   if (!is_numeric($form_state['values']['session_limit'])) {
     form_set_error('session_limit', t('Only numeric submissions are valid.'));
-    watchdog('session_limit', 'Invalid session limit submission for @user.', array('@user' => $form_state['values']['account']->name), WATCHDOG_DEBUG);
+    \Drupal::logger('session_limit')->debug('Invalid session limit submission for @user.', array('@user' => $form_state['values']['account']->name));
   }
 }
 
@@ -247,11 +378,17 @@ function session_limit_user_settings_validate($form, &$form_state) {
  * Session limit user settings form submission.
  */
 function session_limit_user_settings_submit($form, &$form_state) {
-  watchdog('session_limit', 'Maximum sessions for @user updated to @count.', array('@user' => $form_state['values']['account']->name, '@count' => $form_state['values']['session_limit']), WATCHDOG_INFO, l(t('view'), "user/{$form_state['values']['account']->uid}"));
+  // @FIXME
+// l() expects a Url object, created from a route name or external URI.
+// watchdog('session_limit', 'Maximum sessions for @user updated to @count.', array('@user' => $form_state['values']['account']->name, '@count' => $form_state['values']['session_limit']), WATCHDOG_INFO, l(t('view'), "user/{$form_state['values']['account']->uid}"));
+
   if (empty($form_state['values']['session_limit'])) {
     $form_state['values']['session_limit'] = NULL;
   }
-  user_save($form_state['values']['account'], array('data' => array('session_limit' => $form_state['values']['session_limit'])));
+  // @FIXME
+// user_save() is now a method of the user entity.
+// user_save($form_state['values']['account'], array('data' => array('session_limit' => $form_state['values']['session_limit'])));
+
   drupal_set_message(t('Session limit updated for %user.', array('%user' => $form_state['values']['account']->name)), 'status', TRUE);
 }
 
@@ -259,9 +396,13 @@ function session_limit_user_settings_submit($form, &$form_state) {
  * Display or delete sessions form.
  */
 function session_limit_page() {
-  global $user;
+  $user = \Drupal::currentUser();
 
-  if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
+  // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+if (\Drupal::config('session_limit.settings')->get('session_limit_behaviour') == SESSION_LIMIT_DISALLOW_NEW) {
     session_destroy();
     $user = drupal_anonymous_user();
 
@@ -276,7 +417,7 @@ function session_limit_page() {
       array(
         '%host' => $obj->hostname,
         '@message' => $message,
-        '%time' => format_interval(time() - $obj->timestamp))
+        '%time' => \Drupal::service("date.formatter")->formatInterval(time() - $obj->timestamp))
       );
   }
 
@@ -298,7 +439,7 @@ function session_limit_page() {
  * Handler for submissions from session_limit_page().
  */
 function session_limit_page_submit($form, &$form_state) {
-  if ($GLOBALS['user']->sid == $form_state['values']['sid']) {
+  if (\Drupal::currentUser()->sid == $form_state['values']['sid']) {
     drupal_goto('user/logout');
   }
   else {
@@ -311,7 +452,7 @@ function session_limit_page_submit($form, &$form_state) {
  * Helper function for populating the values of the settings form select.
  */
 function _session_limit_user_options() {
-  $options = drupal_map_assoc(range(0, 250));
+  $options = array_combine(range(0, 250), range(0, 250));
   $options[0] = t('Default');
   $options['999999'] = t('Disabled');
   return $options;
@@ -328,11 +469,11 @@ function session_limit_user_max_sessions($account = NULL) {
   $limits = &drupal_static(__FUNCTION__, array());
 
   if (empty($account)) {
-    $account = $GLOBALS['user'];
+    $account = \Drupal::currentUser();
   }
 
   if (!isset($limits[$account->uid])) {
-    $limits[$account->uid] = (int) variable_get('session_limit_max', 1);
+    $limits[$account->uid] = (int) \Drupal::config('session_limit.settings')->get('session_limit_max');
     $limit_account = session_limit_user_max_sessions_byuser($account);
     $limit_role = session_limit_user_max_sessions_byrole($account);
 
@@ -379,12 +520,19 @@ function session_limit_user_max_sessions_byrole($account) {
   $limits = array();
 
   foreach ($account->roles as $rid => $name) {
-    $limits[] = variable_get("session_limit_rid_$rid", 0);
+    // @FIXME
+// // @FIXME
+// // The correct configuration object could not be determined. You'll need to
+// // rewrite this call manually.
+// $role_limit = variable_get("session_limit_rid_$rid", FALSE);
+
+
+    if (!empty($role_limit)) {
+      $limits[] = (int) $role_limit;
+    }
   }
 
-  rsort($limits);
-
-  return (int) $limits[0];
+  return empty($limits) ? 0 : max($limits);
 }
 
 /**
@@ -421,7 +569,7 @@ function session_limit_invoke_session_limit($session, $op) {
   $return = array();
 
   // Execute the hook_session_limit().
-  foreach (module_implements('session_limit') as $name) {
+  foreach (\Drupal::moduleHandler()->getImplementations('session_limit') as $name) {
     $function = $name . '_session_limit';
     $result = $function($session, $op);
     if (isset($result) && is_array($result)) {
@@ -434,8 +582,12 @@ function session_limit_invoke_session_limit($session, $op) {
 
   // In the event of a collision, redirect to session handler.
   if ($op == 'collision') {
-    if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DROP) {
-      global $user;
+    // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+if (\Drupal::config('session_limit.settings')->get('session_limit_behaviour') == SESSION_LIMIT_DROP) {
+      $user = \Drupal::currentUser();
 
       // Get the number of sessions that should be removed.
       $limit = db_query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
@@ -446,7 +598,7 @@ function session_limit_invoke_session_limit($session, $op) {
       if ($limit > 0) {
         // Secure session ids are seperate rows in the database, but we don't want to kick
         // the user off there http session and not there https session or vice versa. This
-        // is why this query is DISTINCT. 
+        // is why this query is DISTINCT.
         $result = db_select('sessions', 's')
           ->distinct()
           ->fields('s', array('sid'))
@@ -476,12 +628,20 @@ function session_limit_invoke_session_limit($session, $op) {
 function session_limit_session_limit($sid, $op) {
   switch ($op) {
     case 'collision':
-      watchdog('session_limit', 'Exceeded maximum allowed active sessions.', array(), WATCHDOG_INFO);
+      \Drupal::logger('session_limit')->info('Exceeded maximum allowed active sessions.', array());
       break;
 
     case 'disconnect':
-      $message = variable_get('session_limit_logged_out_message', SESSION_LIMIT_LOGGED_OUT_MESSAGE);
-      $message_severity = variable_get('session_limit_logged_out_message_severity', SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY);
+      // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+$message = \Drupal::config('session_limit.settings')->get('session_limit_logged_out_message');
+      // @FIXME
+// Could not extract the default value because it is either indeterminate, or
+// not scalar. You'll need to provide a default value in
+// config/install/session_limit.settings.yml and config/schema/session_limit.schema.yml.
+$message_severity = \Drupal::config('session_limit.settings')->get('session_limit_logged_out_message_severity');
       $fields['session'] = '';
 
       if ($message_severity != '_none' && !empty($message)) {
@@ -496,7 +656,7 @@ function session_limit_session_limit($sid, $op) {
         ->condition('sid', $sid)
         ->execute();
 
-      watchdog('session_limit', 'Disconnected for excess active sessions.', array(), WATCHDOG_NOTICE);
+      \Drupal::logger('session_limit')->notice('Disconnected for excess active sessions.', array());
       break;
   }
 }
@@ -515,7 +675,7 @@ function trigger_session_limit($sid, $op) {
     'op' => $op,
     'sid' => $sid,
   );
-  actions_do(array_keys($aids), $GLOBALS['user'], $context);
+  actions_do(array_keys($aids), \Drupal::currentUser(), $context);
 }
 
 /**
@@ -524,6 +684,64 @@ function trigger_session_limit($sid, $op) {
  * This implements the hook on behalf of the rules module.
  */
 function rules_session_limit($sid, $op) {
-  global $user;
+  $user = \Drupal::currentUser();
   rules_invoke_event('session_limit_' . $op, $user, $sid);
+}
+
+/**
+ * Implements hook_session_limit_bypass().
+ *
+ * @return bool
+ *   TRUE if the page request should bypass session limitation restrictions.
+ */
+function session_limit_session_limit_bypass() {
+  if ((arg(0) == 'session' && arg(1) == 'limit') || (arg(0) == 'user' && arg(1) == 'logout')) {
+    return TRUE;
+  }
+}
+
+/**
+ * Execute the session limit bypass hook.
+ *
+ * Allow other modules to prevent session limits in their own requirements.
+ *
+ * @return bool
+ *   TRUE if session limitation should be bypassed.
+ */
+function _session_limit_bypass() {
+  foreach (\Drupal::moduleHandler()->invokeAll('session_limit_bypass') as $bypass) {
+    if (!empty($bypass)) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_variable_group_info().
+ */
+function session_limit_variable_group_info() {
+  $groups['session_limit'] = array(
+    'title' => t('Session limit'),
+    'access' => 'administer site configuration',
+    'path' => array('admin/config/people/session_limit/defaults'),
+  );
+  return $groups;
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function session_limit_variable_info($options) {
+  $variables['session_limit_logged_out_message'] = array(
+    'title' => t('Logged out message', array(), $options),
+    'description' =>  t('The message that is displayed to a user if the workstation has been logged out.<br />
+      @number is replaced with the maximum number of simultaneous sessions.', array(), $options),
+    'type' => 'string',
+    'localize' => TRUE,
+    'group' => 'session_limit',
+  );
+
+  return $variables;
 }

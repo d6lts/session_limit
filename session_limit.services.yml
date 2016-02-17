@@ -1,0 +1,6 @@
+services:
+  init_subscriber:
+    class: Drupal\session_limit\EventSubscriber\InitSubscriber
+    tags:
+      -
+        name: event_subscriber

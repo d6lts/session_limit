@@ -1,0 +1,10 @@
+session_limit.settings:
+  route_name: session_limit.settings
+  title: Defaults
+  base_route: session_limit.settings
+session_limit.settings_byrole:
+  route_name: session_limit.settings_byrole
+  title: 'Role limits'
+session_limit.user_settings:
+  route_name: session_limit.user_settings
+  title: 'Session limit'

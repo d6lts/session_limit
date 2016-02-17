@@ -49,12 +49,12 @@ function session_limit_tokens($type, $tokens, array $data = array(), array $opti
   if ($type == 'session_limit') {
     foreach ($tokens as $name => $original) {
       if ($name == 'default') {
-        $replacements[$original] = variable_get('session_limit_max', 1);
+        $replacements[$original] = \Drupal::config('session_limit.settings')->get('session_limit_max');
       }
     }
   }
   if ($type == 'session_limit' && !empty($data['user'])) {
-    $account = user_load($data['user']->uid);
+    $account = \Drupal::entityManager()->getStorage('user')->load($data['user']->uid);
     foreach ($tokens as $name => $original) {
       switch ($name) {
         case 'max':
@@ -64,7 +64,7 @@ function session_limit_tokens($type, $tokens, array $data = array(), array $opti
           $replacements[$original] = session_limit_user_max_sessions_byrole($account);
           break;
         case 'user':
-          $replacements[$original] = empty($account->session_limit) ? 0 : check_plain($account->session_limit);
+          $replacements[$original] = empty($account->session_limit) ? 0 : \Drupal\Component\Utility\SafeMarkup::checkPlain($account->session_limit);
           break;
       }
     }

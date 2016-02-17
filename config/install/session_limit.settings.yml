@@ -1,0 +1,2 @@
+session_limit_max: 1
+session_limit_masquerade_ignore: false

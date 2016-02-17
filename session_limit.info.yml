@@ -1,7 +1,4 @@
-name: Session Limit
-type: module
-description: 'Limits the number of active sessions a user can have.'
+name: 'Session Limit'
+description: 'Limit simultaneous user sessions.'
 core: 8.x
-configure: admin/config/people/session-limit
-dependencies:
-  - user
+type: module

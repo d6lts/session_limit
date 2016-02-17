@@ -9,10 +9,10 @@
  * Implements hook_uninstall().
  */
 function session_limit_uninstall() {
-  variable_del('session_limit_max');
-  variable_del('session_limit_behaviour');
-  variable_del('session_limit_masquerade_ignore');
-  variable_del('session_limit_logged_out_message_severity');
-  variable_del('session_limit_logged_out_message');
+  \Drupal::config('session_limit.settings')->clear('session_limit_max')->save();
+  \Drupal::config('session_limit.settings')->clear('session_limit_behaviour')->save();
+  \Drupal::config('session_limit.settings')->clear('session_limit_masquerade_ignore')->save();
+  \Drupal::config('session_limit.settings')->clear('session_limit_logged_out_message_severity')->save();
+  \Drupal::config('session_limit.settings')->clear('session_limit_logged_out_message')->save();
   db_query("DELETE FROM {variable} WHERE name LIKE 'session_limit_rid_%'");
 }

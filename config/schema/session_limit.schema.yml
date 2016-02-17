@@ -1,32 +1,8 @@
-# Schema for the configuration files of the Session Limit module.
-
 session_limit.settings:
   type: mapping
-  label: 'Session Limit settings'
+  label: Settings
   mapping:
     session_limit_max:
       type: integer
-      label: 'Maximum number of permitted active sessions'
-    session_limit_behaviour:
-      type: integer
-      label: 'The behaviour of session limit'
-    session_limit_logged_out_message:
-      type: string
-      label: 'The message a user sees when they are logged out'
-    session_limit_logged_out_message_serverity:
-      type: string
-      label: 'The severity of the log out message (e.g. error)'
-    session_limit_roles:
-      type: sequence
-      label: 'The session limits by role'
-      sequence:
-        - type: mapping
-          label: 'Elements of the sequence'
-          mapping:
-            rid:
-              type: integer
-              label: 'Role rid'
-            session_limit:
-              type: integer
-              label: 'Number of sessions'
-            
+    session_limit_masquerade_ignore:
+      type: boolean
