@@ -12,6 +12,25 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class SessionLimit implements EventSubscriberInterface {
 
+  const ACTION_DO_NOTHING = 0;
+
+  const ACTION_SESSION_LIMIT_DROP = 1;
+
+  const ACTION_SESSION_LIMIT_DISALLOW_NEW = 2;
+
+  /**
+   * @return array
+   *   Keys are session limit action ids
+   *   Values are text descriptions of each action.
+   */
+  public static function getActions() {
+    return [
+      SessionLimit::ACTION_DO_NOTHING => t('Do nothing.'),
+      SessionLimit::ACTION_SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
+      SessionLimit::ACTION_SESSION_LIMIT_DISALLOW_NEW => t('Prevent new session.'),
+    ];
+  }
+
   /**
    * @var \Drupal\Core\Session\AccountProxyInterface
    */
