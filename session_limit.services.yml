@@ -1,6 +1,5 @@
 services:
-  init_subscriber:
-    class: Drupal\session_limit\EventSubscriber\InitSubscriber
+  session_limit:
+    class: Drupal\session_limit\Services\SessionLimit
     tags:
-      -
-        name: event_subscriber
+      - {name: event_subscriber}

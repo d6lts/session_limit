@@ -1,4 +1,0 @@
-session_limit.settings:
-  route_name: session_limit.settings
-  title: 'Session limit'
-  description: 'Configure session limits.'

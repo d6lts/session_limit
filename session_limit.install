@@ -4,15 +4,3 @@
  * @file
  * Contains install and update functions for Session Limit.
  */
-
-/**
- * Implements hook_uninstall().
- */
-function session_limit_uninstall() {
-  \Drupal::config('session_limit.settings')->clear('session_limit_max')->save();
-  \Drupal::config('session_limit.settings')->clear('session_limit_behaviour')->save();
-  \Drupal::config('session_limit.settings')->clear('session_limit_masquerade_ignore')->save();
-  \Drupal::config('session_limit.settings')->clear('session_limit_logged_out_message_severity')->save();
-  \Drupal::config('session_limit.settings')->clear('session_limit_logged_out_message')->save();
-  db_query("DELETE FROM {variable} WHERE name LIKE 'session_limit_rid_%'");
-}
