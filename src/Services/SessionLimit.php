@@ -40,7 +40,7 @@ class SessionLimit implements EventSubscriberInterface {
    * If the user has too many sessions invoke collision event.
    */
   public function checkSessionLimit() {
-    if ($this->getCurrentUser()->id() > 0) {//} && !isset($_SESSION['session_limit'])) {
+    if ($this->getCurrentUser()->id() > 1 && !isset($_SESSION['session_limit'])) {
 
       // @todo bypass for path as a hook.
 
@@ -94,9 +94,9 @@ class SessionLimit implements EventSubscriberInterface {
     ))->fetchField();
 
     if ($limit > 0) {
-      // Secure sessionId ids are seperate rows in the database, but we don't want to kick
-      // the user off there http sessionId and not there https sessionId or vice versa. This
-      // is why this query is DISTINCT.
+      // Secure sessionId ids are separate rows in the database, but we don't
+      // want to kick the user off there http sessionId and not there https
+      // sessionId or vice versa. This is why this query is DISTINCT.
       $result = db_select('sessions', 's')
         ->distinct()
         ->fields('s', array('sid'))
