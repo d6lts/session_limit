@@ -603,7 +603,7 @@ function session_limit_session_limit($sid, $op) {
       }
 
       $fields['uid'] = 0;
-      $query = db_update('sessions')
+      db_update('sessions')
         ->fields($fields)
         ->condition('sid', $sid)
         ->execute();
