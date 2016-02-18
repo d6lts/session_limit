@@ -7,6 +7,7 @@
 
 namespace Drupal\session_limit\Services;
 
+use Drupal\Core\Session\AccountInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -74,9 +75,7 @@ class SessionLimit implements EventSubscriberInterface {
       // @todo add support for masquerade.
 
       $active_sessions = $query->countQuery()->execute()->fetchField();
-
-      // @todo allow a variable number of sessions.
-      $max_sessions = 1;
+      $max_sessions = $this->getUserMaxSessions($this->getCurrentUser());
 
       if (!empty($max_sessions) && $active_sessions > $max_sessions) {
         // @todo maybe replace with an event to allow other modules to react.
@@ -148,5 +147,35 @@ class SessionLimit implements EventSubscriberInterface {
       ->execute();
 
     // @todo add a watchdog log entry.
+  }
+
+  /**
+   * Get the maximum sessions allowed for a specific user.
+   *
+   * @param \Drupal\Core\Session\AccountInterface $account
+   *
+   * @return int
+   *   The number of allowed sessions. A value less than 1 means unlimited.
+   */
+  public function getUserMaxSessions(AccountInterface $account) {
+    // @todo remove these statics.
+    $limit = \Drupal::config('session_limit.settings')->get('session_limit_max');
+    $role_limits = \Drupal::config('session_limit.settings')->get('session_limit_roles');
+
+    foreach ($account->getRoles() as $rid) {
+      if (!empty($role_limits[$rid])) {
+        if ($role_limits[$rid] == -1) {
+          // If they have an unlimited role then just return the unlimited value;
+          return -1;
+        }
+
+        // Otherwise, the user gets the largest limit available.
+        $limit = max($limit, $role_limits[$rid]);
+      }
+    }
+
+    // @todo reinstate per user limits.
+
+    return $limit;
   }
 }
