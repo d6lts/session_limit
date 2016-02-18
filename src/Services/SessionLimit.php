@@ -102,7 +102,12 @@ class SessionLimit implements EventSubscriberInterface {
    *   The sessionId id string which identifies the current sessionId.
    */
   public function sessionCollision($sessionId) {
-    // @todo this code only deals with the SESSION_LIMIT_DROP behaviour and needs SESSION_LIMIT_DO_NOTHING.
+    if ($this->getCollisionBehaviour() === self::ACTION_DO_NOTHING) {
+      // @todo add a watchdog log here.
+      return;
+    }
+
+    // @todo need to deal with the ACTION_DISALLOW_NEW.
 
     // Get the number of sessions that should be removed.
     $limit = db_query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
@@ -177,5 +182,14 @@ class SessionLimit implements EventSubscriberInterface {
     // @todo reinstate per user limits.
 
     return $limit;
+  }
+
+  /**
+   * @return int
+   *   Will return one of the constants provided by getActions().
+   */
+  public function getCollisionBehaviour() {
+    // @todo get rid of these statics.
+    return \Drupal::config('session_limit.settings')->get('session_limit_behaviour');
   }
 }
