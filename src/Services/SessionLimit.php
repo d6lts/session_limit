@@ -10,6 +10,7 @@ namespace Drupal\session_limit\Services;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\session_limit\Event\SessionLimitBypassEvent;
+use Drupal\session_limit\Event\SessionLimitCollisionEvent;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -44,6 +45,7 @@ class SessionLimit implements EventSubscriberInterface {
   public static function getSubscribedEvents() {
     $events[KernelEvents::REQUEST][] = ['onKernelRequest'];
     $events['session_limit.bypass'][] = ['onSessionLimitBypass'];
+    $events['session_limit.collision'][] = ['onSessionCollision'];
     return $events;
   }
 
@@ -102,6 +104,7 @@ class SessionLimit implements EventSubscriberInterface {
    */
   protected function getCurrentUser() {
     if (!isset($this->currentUser)) {
+      // @todo can we get rid of this static call?
       $this->currentUser = \Drupal::currentUser();
     }
 
@@ -115,13 +118,13 @@ class SessionLimit implements EventSubscriberInterface {
    * higher than the configured limit.
    */
   public function onKernelRequest() {
-    /** @var SessionLimitBypassEvent $event */
-    $event = $this
+    /** @var SessionLimitBypassEvent $bypassEvent */
+    $bypassEvent = $this
       ->getEventDispatcher()
       ->dispatch('session_limit.bypass', new SessionLimitBypassEvent());
 
     // Check the result of the event to see if we should bypass.
-    if ($event->shouldBypass()) {
+    if ($bypassEvent->shouldBypass()) {
       return;
     }
 
@@ -129,8 +132,11 @@ class SessionLimit implements EventSubscriberInterface {
     $max_sessions = $this->getUserMaxSessions($this->getCurrentUser());
 
     if ($max_sessions > 0 && $active_sessions > $max_sessions) {
-      // @todo maybe replace with an event to allow other modules to react.
-      $this->sessionCollision(session_id(), $active_sessions, $max_sessions);
+      $collisionEvent = new SessionLimitCollisionEvent(session_id(), $this->getCurrentUser(), $active_sessions, $max_sessions);
+
+      $this
+        ->getEventDispatcher()
+        ->dispatch('session_limit.collision', $collisionEvent);
     }
     else {
       // force checking this twice as there's a race condition around
@@ -183,14 +189,9 @@ class SessionLimit implements EventSubscriberInterface {
   /**
    * React to a collision - a user has multiple sessions.
    *
-   * @param string $sessionId
-   *   The sessionId id string which identifies the current sessionId.
-   * @param int $activeSessionCount
-   *   The number of active sessions at the time of collision
-   * @param int $maxSessionCount
-   *   The maximum number of sessions this user can have
+   * @param SessionLimitCollisionEvent $event
    */
-  public function sessionCollision($sessionId, $activeSessionCount, $maxSessionCount) {
+  public function onSessionCollision(SessionLimitCollisionEvent $event) {
     if ($this->getCollisionBehaviour() === self::ACTION_DO_NOTHING) {
       // @todo add a watchdog log here.
       return;
@@ -201,9 +202,8 @@ class SessionLimit implements EventSubscriberInterface {
     // Get the number of sessions that should be removed.
     // @todo replace the straight db query with a select.
     $limit = $this->database->query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
-      // @todo replace with variable number of sessions.
-      ':max_sessions' => $maxSessionCount,
-      ':uid' => $this->getCurrentUser()->id(),
+      ':max_sessions' => $event->getUserMaxSessions(),
+      ':uid' => $event->getAccount()->id(),
     ))->fetchField();
 
     if ($limit > 0) {
@@ -213,7 +213,7 @@ class SessionLimit implements EventSubscriberInterface {
       $result = $this->database->select('sessions', 's')
         ->distinct()
         ->fields('s', array('sid'))
-        ->condition('s.uid', $this->getCurrentUser()->id())
+        ->condition('s.uid', $event->getAccount()->id())
         ->orderBy('timestamp', 'ASC')
         ->range(0, $limit)
         ->execute();
