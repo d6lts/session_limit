@@ -33,16 +33,29 @@ class SessionLimit implements EventSubscriberInterface {
   }
 
   /**
-   * @var \Drupal\Core\Session\AccountProxyInterface
-   */
-  protected $currentUser;
-
-  /**
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
     $events[KernelEvents::REQUEST][] = ['checkSessionLimit'];
     return $events;
+  }
+
+  /**
+   * @var \Drupal\Core\Session\AccountProxyInterface
+   */
+  protected $currentUser;
+
+  /**
+   * @var \Drupal\Core\Database\Connection
+   */
+  protected $database;
+
+  /**
+   * SessionLimit constructor.
+   * @param \Drupal\Core\Database\Connection $database
+   */
+  public function __construct($database) {
+    $this->database = $database;
   }
 
   /**
@@ -65,7 +78,7 @@ class SessionLimit implements EventSubscriberInterface {
       // @todo bypass for path as a hook.
 
       // @todo move this function to a service so db connection can be injected.
-      $query = db_select('sessions', 's')
+      $query = $this->database->select('sessions', 's')
         // Use distict so that HTTP and HTTPS sessions
         // are considered a single sessionId.
         ->distinct()
@@ -110,7 +123,8 @@ class SessionLimit implements EventSubscriberInterface {
     // @todo need to deal with the ACTION_DISALLOW_NEW.
 
     // Get the number of sessions that should be removed.
-    $limit = db_query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
+    // @todo replace the straight db query with a select.
+    $limit = $this->database->query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
       // @todo replace with variable number of sessions.
       ':max_sessions' => 1,
       ':uid' => $this->getCurrentUser()->id(),
@@ -120,7 +134,7 @@ class SessionLimit implements EventSubscriberInterface {
       // Secure sessionId ids are separate rows in the database, but we don't
       // want to kick the user off there http sessionId and not there https
       // sessionId or vice versa. This is why this query is DISTINCT.
-      $result = db_select('sessions', 's')
+      $result = $this->database->select('sessions', 's')
         ->distinct()
         ->fields('s', array('sid'))
         ->condition('s.uid', $this->getCurrentUser()->id())
@@ -143,7 +157,7 @@ class SessionLimit implements EventSubscriberInterface {
   public function sessionDisconnect($sessionId) {
     // @todo we need to put a message into the sessions being ended.
 
-    db_update('sessions')
+    $this->database->update('sessions')
       ->fields([
         'session' => '',
         'uid' => 0,

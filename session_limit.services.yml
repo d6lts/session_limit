@@ -1,5 +1,6 @@
 services:
   session_limit:
     class: Drupal\session_limit\Services\SessionLimit
+    arguments: ['@database']
     tags:
       - {name: event_subscriber}
