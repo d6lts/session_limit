@@ -19,6 +19,8 @@ class SessionLimit implements EventSubscriberInterface {
 
   const ACTION_SESSION_LIMIT_DISALLOW_NEW = 2;
 
+  const USER_UNLIMITED_SESSIONS = -1;
+
   /**
    * @return array
    *   Keys are session limit action ids
@@ -77,22 +79,12 @@ class SessionLimit implements EventSubscriberInterface {
 
       // @todo bypass for path as a hook.
 
-      // @todo move this function to a service so db connection can be injected.
-      $query = $this->database->select('sessions', 's')
-        // Use distict so that HTTP and HTTPS sessions
-        // are considered a single sessionId.
-        ->distinct()
-        ->fields('s', ['sid'])
-        ->condition('s.uid', $this->getCurrentUser()->id());
-
-      // @todo add support for masquerade.
-
-      $active_sessions = $query->countQuery()->execute()->fetchField();
+      $active_sessions = $this->getUserActiveSessionCount($this->getCurrentUser());
       $max_sessions = $this->getUserMaxSessions($this->getCurrentUser());
 
-      if (!empty($max_sessions) && $active_sessions > $max_sessions) {
+      if ($max_sessions > 0 && $active_sessions > $max_sessions) {
         // @todo maybe replace with an event to allow other modules to react.
-        $this->sessionCollision(session_id());
+        $this->sessionCollision(session_id(), $active_sessions, $max_sessions);
       }
       else {
         // force checking this twice as there's a race condition around
@@ -113,8 +105,12 @@ class SessionLimit implements EventSubscriberInterface {
    *
    * @param string $sessionId
    *   The sessionId id string which identifies the current sessionId.
+   * @param int $activeSessionCount
+   *   The number of active sessions at the time of collision
+   * @param int $maxSessionCount
+   *   The maximum number of sessions this user can have
    */
-  public function sessionCollision($sessionId) {
+  public function sessionCollision($sessionId, $activeSessionCount, $maxSessionCount) {
     if ($this->getCollisionBehaviour() === self::ACTION_DO_NOTHING) {
       // @todo add a watchdog log here.
       return;
@@ -126,7 +122,7 @@ class SessionLimit implements EventSubscriberInterface {
     // @todo replace the straight db query with a select.
     $limit = $this->database->query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
       // @todo replace with variable number of sessions.
-      ':max_sessions' => 1,
+      ':max_sessions' => $maxSessionCount,
       ':uid' => $this->getCurrentUser()->id(),
     ))->fetchField();
 
@@ -169,6 +165,28 @@ class SessionLimit implements EventSubscriberInterface {
   }
 
   /**
+   * Get the number of active sessions for a user.
+   *
+   * @param \Drupal\Core\Session\AccountInterface $account
+   *   The user to check on.
+   *
+   * @return int
+   *   The total number of active sessions for the given user
+   */
+  public function getUserActiveSessionCount(AccountInterface $account) {
+    $query = $this->database->select('sessions', 's')
+      // Use distict so that HTTP and HTTPS sessions
+      // are considered a single sessionId.
+      ->distinct()
+      ->fields('s', ['sid'])
+      ->condition('s.uid', $account->id());
+
+    // @todo add support for masquerade.
+
+    return $query->countQuery()->execute()->fetchField();
+  }
+
+  /**
    * Get the maximum sessions allowed for a specific user.
    *
    * @param \Drupal\Core\Session\AccountInterface $account
@@ -183,9 +201,9 @@ class SessionLimit implements EventSubscriberInterface {
 
     foreach ($account->getRoles() as $rid) {
       if (!empty($role_limits[$rid])) {
-        if ($role_limits[$rid] == -1) {
+        if ($role_limits[$rid] === self::USER_UNLIMITED_SESSIONS) {
           // If they have an unlimited role then just return the unlimited value;
-          return -1;
+          return self::USER_UNLIMITED_SESSIONS;
         }
 
         // Otherwise, the user gets the largest limit available.

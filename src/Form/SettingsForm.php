@@ -80,8 +80,8 @@ class SettingsForm extends ConfigFormBase {
       $form['session_limit_roles'][$rid] = [
         '#type' => 'select',
         '#options' => [
-          -1 => t('Uses default'),
-          0 => t('No limits'),
+          0 => t('Uses default'),
+          SessionLimit::USER_UNLIMITED_SESSIONS => t('No limits'),
           1,
           2,
           3,
