@@ -7,9 +7,13 @@
 
 namespace Drupal\session_limit\Services;
 
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\session_limit\Event\SessionLimitBypassEvent;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Drupal\Core\Database\Connection;
 
 class SessionLimit implements EventSubscriberInterface {
 
@@ -38,7 +42,7 @@ class SessionLimit implements EventSubscriberInterface {
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
-    $events[KernelEvents::REQUEST][] = ['checkSessionLimit'];
+    $events[KernelEvents::REQUEST][] = ['onKernelRequest'];
     return $events;
   }
 
@@ -48,16 +52,48 @@ class SessionLimit implements EventSubscriberInterface {
   protected $currentUser;
 
   /**
+   * @var RouteMatchInterface
+   */
+  protected $routeMatch;
+
+  /**
    * @var \Drupal\Core\Database\Connection
    */
   protected $database;
 
   /**
-   * SessionLimit constructor.
-   * @param \Drupal\Core\Database\Connection $database
+   * @var EventDispatcherInterface
    */
-  public function __construct($database) {
+  protected $eventDispatcher;
+
+  /**
+   * SessionLimit constructor.
+   *
+   * @param Connection $database
+   *   The database connection
+   * @param EventDispatcherInterface $eventDispatcher
+   *   The event dispatcher service
+   * @param RouteMatchInterface $routeMatch
+   *   The Route
+   */
+  public function __construct(Connection $database, EventDispatcherInterface $eventDispatcher, RouteMatchInterface $routeMatch) {
+    $this->routeMatch = $routeMatch;
     $this->database = $database;
+    $this->eventDispatcher = $eventDispatcher;
+  }
+
+  /**
+   * @return RouteMatchInterface
+   */
+  public function getRouteMatch() {
+    return $this->routeMatch;
+  }
+
+  /**
+   * @return EventDispatcherInterface
+   */
+  public function getEventDispatcher() {
+    return $this->eventDispatcher;
   }
 
   /**
@@ -72,30 +108,39 @@ class SessionLimit implements EventSubscriberInterface {
   }
 
   /**
-   * If the user has too many sessions invoke collision event.
+   * Event listener, on executing a Kernel request.
+   *
+   * Check the users active sessions and invoke a session collision if it is
+   * higher than the configured limit.
    */
-  public function checkSessionLimit() {
-    if ($this->getCurrentUser()->id() > 1 && !isset($_SESSION['session_limit'])) {
+  public function onKernelRequest() {
+    /** @var SessionLimitBypassEvent $event */
+    $event = $this
+      ->getEventDispatcher()
+      ->dispatch('session_limit.bypass', new SessionLimitBypassEvent());
 
-      // @todo bypass for path as a hook.
+    // Check the result of the event to see if we should bypass.
+    if ($event->shouldBypass()) {
+      return;
+    }
 
-      $active_sessions = $this->getUserActiveSessionCount($this->getCurrentUser());
-      $max_sessions = $this->getUserMaxSessions($this->getCurrentUser());
+    $active_sessions = $this->getUserActiveSessionCount($this->getCurrentUser());
+    $max_sessions = $this->getUserMaxSessions($this->getCurrentUser());
 
-      if ($max_sessions > 0 && $active_sessions > $max_sessions) {
-        // @todo maybe replace with an event to allow other modules to react.
-        $this->sessionCollision(session_id(), $active_sessions, $max_sessions);
+    if ($max_sessions > 0 && $active_sessions > $max_sessions) {
+      // @todo maybe replace with an event to allow other modules to react.
+      $this->sessionCollision(session_id(), $active_sessions, $max_sessions);
+    }
+    else {
+      // force checking this twice as there's a race condition around
+      // sessionId creation see issue #1176412.
+      // @todo accessing the $_SESSION super global is bad.
+      if (!isset($_SESSION['session_limit_checkonce'])) {
+        $_SESSION['session_limit_checkonce'] = TRUE;
       }
       else {
-        // force checking this twice as there's a race condition around
-        // sessionId creation see issue #1176412.
-        if (!isset($_SESSION['session_limit_checkonce'])) {
-          $_SESSION['session_limit_checkonce'] = TRUE;
-        }
-        else {
-          // mark sessionId as verified to bypass this in future.
-          $_SESSION['session_limit'] = TRUE;
-        }
+        // mark sessionId as verified to bypass this in future.
+        $_SESSION['session_limit'] = TRUE;
       }
     }
   }
@@ -196,8 +241,10 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public function getUserMaxSessions(AccountInterface $account) {
     // @todo remove these statics.
-    $limit = \Drupal::config('session_limit.settings')->get('session_limit_max');
-    $role_limits = \Drupal::config('session_limit.settings')->get('session_limit_roles');
+    $limit = \Drupal::config('session_limit.settings')
+      ->get('session_limit_max');
+    $role_limits = \Drupal::config('session_limit.settings')
+      ->get('session_limit_roles');
 
     foreach ($account->getRoles() as $rid) {
       if (!empty($role_limits[$rid])) {
@@ -222,6 +269,7 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public function getCollisionBehaviour() {
     // @todo get rid of these statics.
-    return \Drupal::config('session_limit.settings')->get('session_limit_behaviour');
+    return \Drupal::config('session_limit.settings')
+      ->get('session_limit_behaviour');
   }
 }
