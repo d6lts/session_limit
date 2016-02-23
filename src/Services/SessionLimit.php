@@ -43,6 +43,7 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public static function getSubscribedEvents() {
     $events[KernelEvents::REQUEST][] = ['onKernelRequest'];
+    $events['session_limit.bypass'][] = ['onSessionLimitBypass'];
     return $events;
   }
 
@@ -142,6 +143,40 @@ class SessionLimit implements EventSubscriberInterface {
         // mark sessionId as verified to bypass this in future.
         $_SESSION['session_limit'] = TRUE;
       }
+    }
+  }
+
+  /**
+   * Event listener, on check for session check bypass.
+   *
+   * @param SessionLimitBypassEvent $event
+   */
+  public function onSessionLimitBypass(SessionLimitBypassEvent $event) {
+    if ($this->getCurrentUser()->id() < 2) {
+      // User 1 and anonymous don't get session checked.
+      $event->setBypass(TRUE);
+      return;
+    }
+
+    // @todo accessing the $_SESSION super global is probably bad.
+    if (isset($_SESSION['session_limit'])) {
+      // Already checked people do not get session checked.
+      $event->setBypass(TRUE);
+      return;
+    }
+
+    $route = $this->getRouteMatch();
+    $current_path = $route->getRouteObject()->getPath();
+
+    $bypass_paths = [
+      '/session/limit',
+      '/user/logout',
+    ];
+
+    if (in_array($current_path, $bypass_paths)) {
+      // Don't session check on these routes.
+      $event->setBypass(TRUE);
+      return;
     }
   }
 
