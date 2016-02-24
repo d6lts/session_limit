@@ -11,6 +11,7 @@ use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\session_limit\Event\SessionLimitBypassEvent;
 use Drupal\session_limit\Event\SessionLimitCollisionEvent;
+use Drupal\session_limit\Event\SessionLimitDisconnectEvent;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -219,7 +220,14 @@ class SessionLimit implements EventSubscriberInterface {
         ->execute();
 
       foreach ($result as $session) {
-        $this->sessionDisconnect($session->sid);
+        /** @var SessionLimitDisconnectEvent $disconnectEvent */
+        $disconnectEvent = $this
+          ->getEventDispatcher()
+          ->dispatch('session_limit.disconnect', new SessionLimitDisconnectEvent($session->id, $event));
+
+        if ($disconnectEvent->shouldPreventDisconnect()) {
+          $this->sessionDisconnect($session->sid);
+        }
       }
     }
   }
@@ -228,7 +236,7 @@ class SessionLimit implements EventSubscriberInterface {
    * Disconnect a sessionId.
    *
    * @param string $sessionId
-   *   The session being discconected
+   *   The session being disconnected
    */
   public function sessionDisconnect($sessionId) {
     // @todo we need to put a message into the sessions being ended.
@@ -255,7 +263,7 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public function getUserActiveSessionCount(AccountInterface $account) {
     $query = $this->database->select('sessions', 's')
-      // Use distict so that HTTP and HTTPS sessions
+      // Use distinct so that HTTP and HTTPS sessions
       // are considered a single sessionId.
       ->distinct()
       ->fields('s', ['sid'])
