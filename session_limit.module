@@ -305,6 +305,21 @@ function session_limit_action_info_alter(&$info) {
 }
 
 /**
+ * Implements hook_field_extra_fields().
+ */
+function session_limit_field_extra_fields() {
+  $extra['user']['user']['display'] = array(
+    'session_limit' => array(
+      'label' => t('Session limit'),
+      'description' => t('Session limit.'),
+      'weight' => 10,
+    ),
+  );
+
+  return $extra;
+}
+
+/**
  * Implements hook_user_view().
  */
 function session_limit_user_view($account, $view_mode) {
