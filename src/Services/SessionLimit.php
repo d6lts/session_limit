@@ -225,7 +225,7 @@ class SessionLimit implements EventSubscriberInterface {
           ->getEventDispatcher()
           ->dispatch('session_limit.disconnect', new SessionLimitDisconnectEvent($session->id, $event));
 
-        if ($disconnectEvent->shouldPreventDisconnect()) {
+        if (!$disconnectEvent->shouldPreventDisconnect()) {
           $this->sessionDisconnect($session->sid);
         }
       }
