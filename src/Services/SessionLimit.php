@@ -9,6 +9,7 @@ namespace Drupal\session_limit\Services;
 
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\session_limit\Event\SessionLimitBypassEvent;
 use Drupal\session_limit\Event\SessionLimitCollisionEvent;
 use Drupal\session_limit\Event\SessionLimitDisconnectEvent;
@@ -21,9 +22,9 @@ class SessionLimit implements EventSubscriberInterface {
 
   const ACTION_DO_NOTHING = 0;
 
-  const ACTION_SESSION_LIMIT_DROP = 1;
+  const ACTION_DROP_OLDEST = 1;
 
-  const ACTION_SESSION_LIMIT_DISALLOW_NEW = 2;
+  const ACTION_PREVENT_NEW = 2;
 
   const USER_UNLIMITED_SESSIONS = -1;
 
@@ -35,8 +36,8 @@ class SessionLimit implements EventSubscriberInterface {
   public static function getActions() {
     return [
       SessionLimit::ACTION_DO_NOTHING => t('Do nothing.'),
-      SessionLimit::ACTION_SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
-      SessionLimit::ACTION_SESSION_LIMIT_DISALLOW_NEW => t('Prevent new session.'),
+      SessionLimit::ACTION_DROP_OLDEST => t('Automatically drop the oldest sessions without prompting.'),
+      SessionLimit::ACTION_PREVENT_NEW => t('Prevent new session.'),
     ];
   }
 
@@ -188,18 +189,54 @@ class SessionLimit implements EventSubscriberInterface {
   }
 
   /**
-   * React to a collision - a user has multiple sessions.
+   * React to a collision event.
+   *
+   * The user has more sessions than they are allowed. Depending on the
+   * configured behaviour of the module we will either drop existing sessions,
+   * prevent this new session or ask the user what to do.
    *
    * @param SessionLimitCollisionEvent $event
    */
   public function onSessionCollision(SessionLimitCollisionEvent $event) {
-    if ($this->getCollisionBehaviour() === self::ACTION_DO_NOTHING) {
-      // @todo add a watchdog log here.
-      return;
+    switch ($this->getCollisionBehaviour()) {
+      case self::ACTION_DO_NOTHING :
+        // @todo in this situation we need to ask the user what to do.
+        break;
+
+      case self::ACTION_PREVENT_NEW :
+        $this->_onSessionCollision__PreventNew($event);
+        break;
+
+      case self::ACTION_DROP_OLDEST :
+        $this->_onSessionCollision__DropOldest($event);
+        break;
     }
+  }
 
-    // @todo need to deal with the ACTION_DISALLOW_NEW.
+  /**
+   * React to a session collision by preventing new sessions.
+   *
+   * @param SessionLimitCollisionEvent $event
+   *   The session collision event.
+   */
+  protected function _onSessionCollision__PreventNew(SessionLimitCollisionEvent $event) {
+    /** @var SessionLimitDisconnectEvent $disconnectEvent */
+    $disconnectEvent = $this
+      ->getEventDispatcher()
+      ->dispatch('session_limit.disconnect', new SessionLimitDisconnectEvent($event->getSessionId(), $event, $this->getMessage($event->getAccount())));
 
+    if (!$disconnectEvent->shouldPreventDisconnect()) {
+      $this->sessionActiveDisconnect($disconnectEvent->getMessage());
+    }
+  }
+
+  /**
+   * React to a session collision by dropping older sessions.
+   *
+   * @param SessionLimitCollisionEvent $event
+   *   The session collision event.
+   */
+  protected function _onSessionCollision__DropOldest(SessionLimitCollisionEvent $event) {
     // Get the number of sessions that should be removed.
     // @todo replace the straight db query with a select.
     $limit = $this->database->query("SELECT COUNT(DISTINCT(sid)) - :max_sessions FROM {sessions} WHERE uid = :uid", array(
@@ -258,6 +295,22 @@ class SessionLimit implements EventSubscriberInterface {
       ->execute();
 
     // @todo add a watchdog log entry.
+  }
+
+  /**
+   * Disconnect the active session.
+   *
+   * This is called when the user is prevented from logging in due to an
+   * existing open session.
+   *
+   * @param string $message
+   */
+  public function sessionActiveDisconnect($message) {
+    drupal_set_message($message, $this->getMessageSeverity());
+    $user = \Drupal::currentUser();
+    \Drupal::moduleHandler()->invokeAll('user_logout', array($user));
+    \Drupal::service('session_manager')->destroy();
+    $user->setAccount(new AnonymousUserSession());
   }
 
   /**
