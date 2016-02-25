@@ -28,14 +28,21 @@ class SessionLimitDisconnectEvent extends Event {
   protected $preventDisconnect = FALSE;
 
   /**
+   * @var string
+   */
+  protected $message;
+
+  /**
    * SessionLimitCollisionEvent constructor.
    *
    * @param int $sessionId
    * @param SessionLimitCollisionEvent $collisionEvent
+   * @param string $message
    */
-  public function __construct($sessionId, SessionLimitCollisionEvent $collisionEvent) {
+  public function __construct($sessionId, SessionLimitCollisionEvent $collisionEvent, $message) {
     $this->sessionId = $sessionId;
     $this->collisionEvent = $collisionEvent;
+    $this->message = $message;
   }
 
   /**
@@ -73,4 +80,23 @@ class SessionLimitDisconnectEvent extends Event {
     return $this->preventDisconnect;
   }
 
+  /**
+   * Get the message the user will see when their session is ended.
+   *
+   * @return string
+   */
+  public function getMessage() {
+    return $this->message;
+  }
+
+  /**
+   * Set the message the user sees when their session is ended.
+   *
+   * @param string $message
+   * @return $this
+   */
+  public function setMessage($message) {
+    $this->message = $message;
+    return $this;
+  }
 }

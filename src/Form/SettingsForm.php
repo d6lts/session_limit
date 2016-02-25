@@ -65,7 +65,7 @@ class SettingsForm extends ConfigFormBase {
         'status' => t('Status'),
         '_none' => t('No Message'),
       ],
-      '#description' => t('The Drupal message type.  Defaults to Error.'),
+      '#description' => t('The severity of the message the user receives when they are logged out by session limit.'),
     ];
 
     $role_limits = \Drupal::config('session_limit.settings')->get('session_limit_roles');

@@ -223,10 +223,10 @@ class SessionLimit implements EventSubscriberInterface {
         /** @var SessionLimitDisconnectEvent $disconnectEvent */
         $disconnectEvent = $this
           ->getEventDispatcher()
-          ->dispatch('session_limit.disconnect', new SessionLimitDisconnectEvent($session->id, $event));
+          ->dispatch('session_limit.disconnect', new SessionLimitDisconnectEvent($session->id, $event, $this->getMessage($event->getAccount())));
 
         if (!$disconnectEvent->shouldPreventDisconnect()) {
-          $this->sessionDisconnect($session->sid);
+          $this->sessionDisconnect($session->sid, $disconnectEvent->getMessage());
         }
       }
     }
@@ -237,14 +237,22 @@ class SessionLimit implements EventSubscriberInterface {
    *
    * @param string $sessionId
    *   The session being disconnected
+   * @param string $message
+   *   The logout message which must be already translated by this point
    */
-  public function sessionDisconnect($sessionId) {
-    // @todo we need to put a message into the sessions being ended.
+  public function sessionDisconnect($sessionId, $message) {
+    $serialized_message = '';
+
+    if ($this->hasMessageSeverity() && !empty($message)) {
+      $serialized_message = 'messages|' . serialize([
+          $this->getMessageSeverity() => [$message],
+        ]);
+    }
 
     $this->database->update('sessions')
       ->fields([
-        'session' => '',
         'uid' => 0,
+        'session' => $serialized_message,
       ])
       ->condition('sid', $sessionId)
       ->execute();
@@ -314,5 +322,36 @@ class SessionLimit implements EventSubscriberInterface {
     // @todo get rid of these statics.
     return \Drupal::config('session_limit.settings')
       ->get('session_limit_behaviour');
+  }
+
+  /**
+   * return @bool
+   */
+  public function hasMessageSeverity() {
+    $severity = $this->getMessageSeverity();
+    return !empty($severity) && in_array($severity, ['error', 'warning', 'status']);
+  }
+
+  /**
+   * Get the severity of the logout message to the user.
+   *
+   * @return string
+   */
+  public function getMessageSeverity() {
+    // @todo get rid of these statics.
+    return \Drupal::config('session_limit.settings')
+      ->get('session_limit_logged_out_message_severity');
+  }
+
+  /**
+   * Get the logged out message for the given user.
+   *
+   * @param AccountInterface $account
+   * @return string
+   */
+  public function getMessage(AccountInterface $account) {
+    return t('You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous session(s) was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.', [
+      '@number' => $this->getUserMaxSessions($account),
+    ]);
   }
 }
