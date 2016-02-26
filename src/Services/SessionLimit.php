@@ -14,13 +14,14 @@ use Drupal\session_limit\Event\SessionLimitBypassEvent;
 use Drupal\session_limit\Event\SessionLimitCollisionEvent;
 use Drupal\session_limit\Event\SessionLimitDisconnectEvent;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Drupal\Core\Database\Connection;
 
 class SessionLimit implements EventSubscriberInterface {
 
-  const ACTION_DO_NOTHING = 0;
+  const ACTION_ASK = 0;
 
   const ACTION_DROP_OLDEST = 1;
 
@@ -35,9 +36,9 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public static function getActions() {
     return [
-      SessionLimit::ACTION_DO_NOTHING => t('Do nothing.'),
-      SessionLimit::ACTION_DROP_OLDEST => t('Automatically drop the oldest sessions without prompting.'),
-      SessionLimit::ACTION_PREVENT_NEW => t('Prevent new session.'),
+      SessionLimit::ACTION_ASK => t('Ask user which session to end.'),
+      SessionLimit::ACTION_DROP_OLDEST => t('Automatically drop the oldest sessions.'),
+      SessionLimit::ACTION_PREVENT_NEW => t('Prevent creating of any new sessions.'),
     ];
   }
 
@@ -177,7 +178,7 @@ class SessionLimit implements EventSubscriberInterface {
     $current_path = $route->getRouteObject()->getPath();
 
     $bypass_paths = [
-      '/session/limit',
+      '/session-limit',
       '/user/logout',
     ];
 
@@ -199,8 +200,11 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public function onSessionCollision(SessionLimitCollisionEvent $event) {
     switch ($this->getCollisionBehaviour()) {
-      case self::ACTION_DO_NOTHING :
-        // @todo in this situation we need to ask the user what to do.
+      case self::ACTION_ASK :
+        drupal_set_message('You have been redirected because...');
+        $response = new RedirectResponse(\Drupal::url('session_limit.limit_form'));
+        $response->send();
+        exit();
         break;
 
       case self::ACTION_PREVENT_NEW :
