@@ -20,10 +20,21 @@ class SessionLimitForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'session_limit_page';
+    return 'session_limit_form';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function buildForm(array $form, FormStateInterface $form_state) {
+    /** @var SessionLimit $session_limit */
+    $session_limit = \Drupal::service('session_limit');
+
+    $form['title'] = [
+      '#type' => 'markup',
+      '#markup' => '<p>' . t('Your active sessions are listed below. You need to choose a session to end.') . '</p>',
+    ];
+
     /** @var SessionManager $session_manager */
     $session_manager = \Drupal::service('session_manager');
     $current_session_id = Crypt::hashBase64($session_manager->getId());
@@ -77,6 +88,7 @@ class SessionLimitForm extends FormBase {
     }
     else {
       $session_limit->sessionDisconnect($sid, t('Your session was deliberately ended from another session.'));
+      $form_state->setRedirect('<front>');
     }
   }
 

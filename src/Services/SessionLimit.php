@@ -7,10 +7,10 @@
 
 namespace Drupal\session_limit\Services;
 
+use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AnonymousUserSession;
-use Drupal\Core\Url;
 use Drupal\session_limit\Event\SessionLimitBypassEvent;
 use Drupal\session_limit\Event\SessionLimitCollisionEvent;
 use Drupal\session_limit\Event\SessionLimitDisconnectEvent;
@@ -202,10 +202,7 @@ class SessionLimit implements EventSubscriberInterface {
   public function onSessionCollision(SessionLimitCollisionEvent $event) {
     switch ($this->getCollisionBehaviour()) {
       case self::ACTION_ASK :
-        drupal_set_message(t('You have too many active sessions. Please choose a session to end.'));
-        $response = new RedirectResponse(Url::fromRoute('session_limit.limit_form'));
-        $response->send();
-        exit();
+        $this->_onSessionCollision__Ask();
         break;
 
       case self::ACTION_PREVENT_NEW :
@@ -216,6 +213,19 @@ class SessionLimit implements EventSubscriberInterface {
         $this->_onSessionCollision__DropOldest($event);
         break;
     }
+  }
+
+  /**
+   * React to a session collision by asking the user which session to end.
+   */
+  protected function _onSessionCollision__Ask() {
+    drupal_set_message(t('You have too many active sessions. Please choose a session to end.'));
+    $response = new RedirectResponse(\Drupal::url('session_limit.limit_form'), 307, [
+      'Cache-Control' => 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0',
+      'Expires' => 'Sat, 26 Jul 1997 05:00:00 GMT',
+    ]);
+    $response->send();
+    exit();
   }
 
   /**
@@ -357,7 +367,7 @@ class SessionLimit implements EventSubscriberInterface {
 
     foreach ($account->getRoles() as $rid) {
       if (!empty($role_limits[$rid])) {
-        if ($role_limits[$rid] === self::USER_UNLIMITED_SESSIONS) {
+        if ($role_limits[$rid] == self::USER_UNLIMITED_SESSIONS) {
           // If they have an unlimited role then just return the unlimited value;
           return self::USER_UNLIMITED_SESSIONS;
         }
