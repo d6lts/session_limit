@@ -10,6 +10,7 @@ namespace Drupal\session_limit\Services;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AnonymousUserSession;
+use Drupal\Core\Url;
 use Drupal\session_limit\Event\SessionLimitBypassEvent;
 use Drupal\session_limit\Event\SessionLimitCollisionEvent;
 use Drupal\session_limit\Event\SessionLimitDisconnectEvent;
@@ -201,8 +202,8 @@ class SessionLimit implements EventSubscriberInterface {
   public function onSessionCollision(SessionLimitCollisionEvent $event) {
     switch ($this->getCollisionBehaviour()) {
       case self::ACTION_ASK :
-        drupal_set_message('You have been redirected because...');
-        $response = new RedirectResponse(\Drupal::url('session_limit.limit_form'));
+        drupal_set_message(t('You have too many active sessions. Please choose a session to end.'));
+        $response = new RedirectResponse(Url::fromRoute('session_limit.limit_form'));
         $response->send();
         exit();
         break;
