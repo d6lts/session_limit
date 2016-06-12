@@ -43,12 +43,7 @@ class SessionLimitForm extends FormBase {
 
     $sids = [];
 
-    // @todo get rid of this static db query.
-    $result = db_query('SELECT * FROM {sessions} WHERE uid = :uid', [
-      ':uid' => $user->id(),
-      ]);
-
-    foreach ($result as $obj) {
+    foreach ($session_limit->getUserActiveSessions($user) as $obj) {
       $message = $current_session_id == $obj->sid ? t('Your current session.') : '';
 
       $sids[$obj->sid] = t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>', [

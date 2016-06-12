@@ -7,7 +7,6 @@
 
 namespace Drupal\session_limit\Services;
 
-use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AnonymousUserSession;
@@ -164,6 +163,12 @@ class SessionLimit implements EventSubscriberInterface {
   public function onSessionLimitBypass(SessionLimitBypassEvent $event) {
     if ($this->getCurrentUser()->id() < 2) {
       // User 1 and anonymous don't get session checked.
+      $event->setBypass(TRUE);
+      return;
+    }
+
+    if ($this->getMasqueradeIgnore() && \Drupal::service('masquerade')->isMasquerading()) {
+      // Masquerading sessions do not count.
       $event->setBypass(TRUE);
       return;
     }
@@ -345,9 +350,38 @@ class SessionLimit implements EventSubscriberInterface {
       ->fields('s', ['sid'])
       ->condition('s.uid', $account->id());
 
-    // @todo add support for masquerade.
+    if ($this->getMasqueradeIgnore()) {
+      // Masquerading sessions do not count.
+      $like = '%' . $this->database->escapeLike('masquerading') . '%';
+      $query->condition('s.session', $like, 'NOT LIKE');
+    }
 
+    /** @var \Drupal\Core\Database\Query\Select $query */
     return $query->countQuery()->execute()->fetchField();
+  }
+
+  /**
+   * Get a list of active sessions for a user.
+   *
+   * @param \Drupal\Core\Session\AccountInterface $account
+   *   The user to check on.
+   *
+   * @return array
+   *   A list of session objects for the user.
+   */
+  public function getUserActiveSessions(AccountInterface $account) {
+    $query = $this->database->select('sessions', 's')
+      ->fields('s', ['uid', 'sid', 'hostname', 'timestamp'])
+      ->condition('s.uid', $account->id());
+
+    if ($this->getMasqueradeIgnore()) {
+      // Masquerading sessions do not count.
+      $like = '%' . $this->database->escapeLike('masquerading') . '%';
+      $query->condition('s.session', $like, 'NOT LIKE');
+    }
+
+    /** @var \Drupal\Core\Database\Query\Select $query */
+    return $query->execute()->fetchAll();
   }
 
   /**
@@ -393,11 +427,29 @@ class SessionLimit implements EventSubscriberInterface {
   }
 
   /**
+   * @return bool
+   *   Should we ignore masqueraded sessions?
+   */
+  public function getMasqueradeIgnore() {
+    $masqueradeModuleExists = \Drupal::moduleHandler()->moduleExists('masquerade');
+    if (!$masqueradeModuleExists) {
+      return FALSE;
+    }
+
+    return \Drupal::config('session_limit.settings')
+      ->get('session_limit_masquerade_ignore');
+  }
+
+  /**
    * return @bool
    */
   public function hasMessageSeverity() {
     $severity = $this->getMessageSeverity();
-    return !empty($severity) && in_array($severity, ['error', 'warning', 'status']);
+    return !empty($severity) && in_array($severity, [
+      'error',
+      'warning',
+      'status'
+    ]);
   }
 
   /**
