@@ -1,7 +1,7 @@
 name = Session Limit
 description = "Limit simultaneous user sessions."
 core = 7.x
-configure = admin/config/people/session_limit
+configure = admin/config/people/session-limit
 
 files[] = session_limit.install
 files[] = session_limit.module

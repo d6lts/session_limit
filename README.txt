@@ -10,7 +10,7 @@ then enabling the module.
 
 The default max sessions is 1. Change default max sessions can be changed in
 'Configuration >> People >> Session Limit'
-The path for this is /admin/config/people/session_limit
+The path for this is /admin/config/people/session-limit
 
 Triggers are available to assign any of the three system actions to either the
 collision or disconnect events. That includes displaying a message to the user,
