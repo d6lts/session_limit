@@ -127,6 +127,13 @@ function session_limit_settings() {
     '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
   );
 
+  $form['session_limit_include_root_user'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Apply limit to root admin user.'),
+    '#description' => t('By default session limits do not apply to user #1'),
+    '#default_value' => variable_get('session_limit_include_root_user', FALSE),
+  );
+
   $limit_behaviours = array(
     SESSION_LIMIT_DO_NOTHING => t('Do nothing.'),
     SESSION_LIMIT_DROP => t('Automatically drop the oldest sessions without prompting.'),
@@ -247,7 +254,8 @@ function session_limit_settings_byrole_submit($form, &$form_state) {
  */
 function session_limit_init() {
   global $user;
-  if ($user->uid > 1 && !isset($_SESSION['session_limit'])) {
+  $user_match = variable_get('session_limit_include_root_user', FALSE) ? 0 : 1;
+  if ($user->uid > $user_match && !isset($_SESSION['session_limit'])) {
 
     if (_session_limit_bypass()) {
       // Bypass the session limitation on this page callback.
@@ -351,6 +359,21 @@ function session_limit_user_settings($form, $form_state, $account) {
     '#default_value' => empty($account->data['session_limit']) ? 0 : $account->data['session_limit'],
     '#options' => _session_limit_user_options(),
   );
+
+  if ($account->uid == 1) {
+    $form['session_limit']['#states'] = array(
+      'enabled' => array(
+        ':input[name="session_limit_include_root_user"]' => array('checked' => TRUE),
+      ),
+    );
+    $form['session_limit_include_root_user'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Apply limit to root admin user.'),
+      '#description' => t('By default session limits do not apply to user #1'),
+      '#default_value' => variable_get('session_limit_include_root_user', FALSE),
+    );
+  }
+
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save configuration'),
@@ -375,6 +398,9 @@ function session_limit_user_settings_submit($form, &$form_state) {
   watchdog('session_limit', 'Maximum sessions for @user updated to @count.', array('@user' => $form_state['values']['account']->name, '@count' => $form_state['values']['session_limit']), WATCHDOG_INFO, l(t('view'), "user/{$form_state['values']['account']->uid}"));
   if (empty($form_state['values']['session_limit'])) {
     $form_state['values']['session_limit'] = NULL;
+  }
+  if ($form_state['values']['account']->uid == 1) {
+    variable_set('session_limit_include_root_user', !empty($form_state['values']['session_limit_include_root_user']));
   }
   user_save($form_state['values']['account'], array('data' => array('session_limit' => $form_state['values']['session_limit'])));
   drupal_set_message(t('Session limit updated for %user.', array('%user' => $form_state['values']['account']->name)), 'status', TRUE);
