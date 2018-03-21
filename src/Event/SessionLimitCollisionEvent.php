@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains Drupal\session_limit\Event\SessionLimitCollisionEvent.
- */
-
 namespace Drupal\session_limit\Event;
 
 use Symfony\Component\EventDispatcher\Event;

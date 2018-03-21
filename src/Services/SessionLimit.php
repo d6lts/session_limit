@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\session_limit\Services\SessionLimit.
- */
-
 namespace Drupal\session_limit\Services;
 
 use Drupal\Core\Routing\RouteMatchInterface;

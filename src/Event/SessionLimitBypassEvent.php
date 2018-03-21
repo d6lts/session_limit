@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains Drupal\session_limit\Event\SessionLimitBypassEvent.
- */
-
 namespace Drupal\session_limit\Event;
 
 use Symfony\Component\EventDispatcher\Event;

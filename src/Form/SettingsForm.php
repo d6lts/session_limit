@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\session_limit\Form\SessionLimitSettings.
- */
-
 namespace Drupal\session_limit\Form;
 
 use Drupal\Core\Form\ConfigFormBase;

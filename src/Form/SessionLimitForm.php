@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\session_limit\Form\SessionLimitPage.
- */
-
 namespace Drupal\session_limit\Form;
 
 use Drupal\Component\Utility\Crypt;
