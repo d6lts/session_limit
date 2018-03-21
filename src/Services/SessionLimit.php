@@ -18,6 +18,10 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Session\AccountProxy;
+use Drupal\Core\Session\SessionManager;
+use Drupal\Core\Extension\ModuleHandler;
+use Drupal\Core\Config\ConfigFactory;
 
 class SessionLimit implements EventSubscriberInterface {
 
@@ -70,22 +74,50 @@ class SessionLimit implements EventSubscriberInterface {
   /**
    * @var EventDispatcherInterface
    */
+
   protected $eventDispatcher;
+
+  /**
+   * @var SessionManager
+   */
+  protected $sessionManager;
+
+  /**
+   * @var ModuleHandler
+   */
+  protected $moduleHandler;
+
+  /**
+   * @var ConfigFactory
+   */
+  protected $configFactory;
 
   /**
    * SessionLimit constructor.
    *
    * @param Connection $database
-   *   The database connection
+   *   The database connection.
    * @param EventDispatcherInterface $eventDispatcher
-   *   The event dispatcher service
+   *   The event dispatcher service.
    * @param RouteMatchInterface $routeMatch
-   *   The Route
+   *   The Route.
+   * @param AccountProxy $currentUser
+   *   The current user.
+   * @param SessionManager $sessionManager
+   *   Session manager.
+   * @param ModuleHandler $moduleHandler
+   *   Module handler.
+   * @param ConfigFactory $configFactory
+   *   Config factory.
    */
-  public function __construct(Connection $database, EventDispatcherInterface $eventDispatcher, RouteMatchInterface $routeMatch) {
+  public function __construct(Connection $database, EventDispatcherInterface $eventDispatcher, RouteMatchInterface $routeMatch, AccountProxy $currentUser, SessionManager $sessionManager, ModuleHandler $moduleHandler, ConfigFactory $configFactory) {
     $this->routeMatch = $routeMatch;
     $this->database = $database;
     $this->eventDispatcher = $eventDispatcher;
+    $this->currentUser = $currentUser;
+    $this->sessionManager = $sessionManager;
+    $this->moduleHandler = $moduleHandler;
+    $this->configFactory = $configFactory;
   }
 
   /**
@@ -106,11 +138,6 @@ class SessionLimit implements EventSubscriberInterface {
    * @return \Drupal\Core\Session\AccountProxyInterface
    */
   protected function getCurrentUser() {
-    if (!isset($this->currentUser)) {
-      // @todo can we get rid of this static call?
-      $this->currentUser = \Drupal::currentUser();
-    }
-
     return $this->currentUser;
   }
 
@@ -327,10 +354,9 @@ class SessionLimit implements EventSubscriberInterface {
    */
   public function sessionActiveDisconnect($message) {
     drupal_set_message($message, $this->getMessageSeverity());
-    $user = \Drupal::currentUser();
-    \Drupal::moduleHandler()->invokeAll('user_logout', array($user));
-    \Drupal::service('session_manager')->destroy();
-    $user->setAccount(new AnonymousUserSession());
+    $this->moduleHandler->invokeAll('user_logout', array($this->currentUser));
+    $this->sessionManager->destroy();
+    $this->currentUser->setAccount(new AnonymousUserSession());
   }
 
   /**
@@ -393,10 +419,9 @@ class SessionLimit implements EventSubscriberInterface {
    *   The number of allowed sessions. A value less than 1 means unlimited.
    */
   public function getUserMaxSessions(AccountInterface $account) {
-    // @todo remove these statics.
-    $limit = \Drupal::config('session_limit.settings')
+    $limit = $this->configFactory->get('session_limit.settings')
       ->get('session_limit_max');
-    $role_limits = \Drupal::config('session_limit.settings')
+    $role_limits = $this->configFactory->get('session_limit.settings')
       ->get('session_limit_roles');
 
     foreach ($account->getRoles() as $rid) {
@@ -421,8 +446,7 @@ class SessionLimit implements EventSubscriberInterface {
    *   Will return one of the constants provided by getActions().
    */
   public function getCollisionBehaviour() {
-    // @todo get rid of these statics.
-    return \Drupal::config('session_limit.settings')
+    return $this->configFactory->get('session_limit.settings')
       ->get('session_limit_behaviour');
   }
 
@@ -431,12 +455,12 @@ class SessionLimit implements EventSubscriberInterface {
    *   Should we ignore masqueraded sessions?
    */
   public function getMasqueradeIgnore() {
-    $masqueradeModuleExists = \Drupal::moduleHandler()->moduleExists('masquerade');
+    $masqueradeModuleExists = $this->moduleHandler->moduleExists('masquerade');
     if (!$masqueradeModuleExists) {
       return FALSE;
     }
 
-    return \Drupal::config('session_limit.settings')
+    return $this->configFactory->get('session_limit.settings')
       ->get('session_limit_masquerade_ignore');
   }
 
@@ -458,8 +482,7 @@ class SessionLimit implements EventSubscriberInterface {
    * @return string
    */
   public function getMessageSeverity() {
-    // @todo get rid of these statics.
-    return \Drupal::config('session_limit.settings')
+    return $this->configFactory->get('session_limit.settings')
       ->get('session_limit_logged_out_message_severity');
   }
 
