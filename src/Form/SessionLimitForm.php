@@ -27,7 +27,7 @@ class SessionLimitForm extends FormBase {
 
     $form['title'] = [
       '#type' => 'markup',
-      '#markup' => '<p>' . t('Your active sessions are listed below. You need to choose a session to end.') . '</p>',
+      '#markup' => '<p>' . $this->t('Your active sessions are listed below. You need to choose a session to end.') . '</p>',
     ];
 
     /** @var SessionManager $session_manager */
@@ -39,9 +39,9 @@ class SessionLimitForm extends FormBase {
     $sids = [];
 
     foreach ($session_limit->getUserActiveSessions($user) as $obj) {
-      $message = $current_session_id == $obj->sid ? t('Your current session.') : '';
+      $message = $current_session_id == $obj->sid ? $this->t('Your current session.') : '';
 
-      $sids[$obj->sid] = t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>', [
+      $sids[$obj->sid] = $this->t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>', [
         '%host' => $obj->hostname,
         '@message' => $message,
         '%time' => \Drupal::service("date.formatter")->formatInterval(time() - $obj->timestamp),
@@ -50,13 +50,13 @@ class SessionLimitForm extends FormBase {
 
     $form['sid'] = [
       '#type' => 'radios',
-      '#title' => t('Select a session to disconnect.'),
+      '#title' => $this->t('Select a session to disconnect.'),
       '#options' => $sids,
     ];
 
     $form['submit'] = [
       '#type' => 'submit',
-      '#value' => t('Disconnect session'),
+      '#value' => $this->t('Disconnect session'),
     ];
 
     return $form;
@@ -73,11 +73,11 @@ class SessionLimitForm extends FormBase {
 
     if ($current_session_id == $sid) {
       // @todo the user is not seeing the message below.
-      $session_limit->sessionActiveDisconnect(t('You chose to end this session.'));
+      $session_limit->sessionActiveDisconnect($this->t('You chose to end this session.'));
       $form_state->setRedirect('user.login');
     }
     else {
-      $session_limit->sessionDisconnect($sid, t('Your session was deliberately ended from another session.'));
+      $session_limit->sessionDisconnect($sid, $this->t('Your session was deliberately ended from another session.'));
       $form_state->setRedirect('<front>');
     }
   }

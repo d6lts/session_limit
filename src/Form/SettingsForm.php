@@ -27,16 +27,16 @@ class SettingsForm extends ConfigFormBase {
 
     $form['session_limit_max'] = [
       '#type' => 'textfield',
-      '#title' => t('Default maximum number of active sessions'),
+      '#title' => $this->t('Default maximum number of active sessions'),
       '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_max'),
       '#size' => 2,
       '#maxlength' => 3,
-      '#description' => t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
+      '#description' => $this->t('The maximum number of active sessions a user can have. 0 implies unlimited sessions.'),
     ];
 
     $form['session_limit_behaviour'] = [
       '#type' => 'radios',
-      '#title' => t('When the session limit is exceeded'),
+      '#title' => $this->t('When the session limit is exceeded'),
       '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_behaviour'),
       '#options' => SessionLimit::getActions(),
     ];
@@ -44,39 +44,39 @@ class SettingsForm extends ConfigFormBase {
     if (\Drupal::moduleHandler()->moduleExists('masquerade')) {
       $form['session_limit_masquerade_ignore'] = [
         '#type' => 'checkbox',
-        '#title' => t('Ignore masqueraded sessions.'),
-        '#description' => t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
+        '#title' => $this->t('Ignore masqueraded sessions.'),
+        '#description' => $this->t("When a user administrator uses the masquerade module to impersonate a different user, it won't count against the session limit counter"),
         '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_masquerade_ignore'),
       ];
     }
 
     $form['session_limit_logged_out_message_severity'] = [
       '#type' => 'select',
-      '#title' => t('Logged out message severity'),
+      '#title' => $this->t('Logged out message severity'),
       '#default_value' => \Drupal::config('session_limit.settings')->get('session_limit_logged_out_message_severity'),
       '#options' => [
-        'error' => t('Error'),
-        'warning' => t('Warning'),
-        'status' => t('Status'),
-        '_none' => t('No Message'),
+        'error' => $this->t('Error'),
+        'warning' => $this->t('Warning'),
+        'status' => $this->t('Status'),
+        '_none' => $this->t('No Message'),
       ],
-      '#description' => t('The severity of the message the user receives when they are logged out by session limit.'),
+      '#description' => $this->t('The severity of the message the user receives when they are logged out by session limit.'),
     ];
 
     $role_limits = \Drupal::config('session_limit.settings')->get('session_limit_roles');
 
     $form['session_limit_roles'] = [
       '#type' => 'fieldset',
-      '#title' => t('Role limits'),
-      '#description' => t('Optionally, specify session limits by role.'),
+      '#title' => $this->t('Role limits'),
+      '#description' => $this->t('Optionally, specify session limits by role.'),
     ];
 
     foreach (user_roles(TRUE) as $rid => $role) {
       $form['session_limit_roles'][$rid] = [
         '#type' => 'select',
         '#options' => [
-          0 => t('Uses default'),
-          SessionLimit::USER_UNLIMITED_SESSIONS => t('No limits'),
+          0 => $this->t('Uses default'),
+          SessionLimit::USER_UNLIMITED_SESSIONS => $this->t('No limits'),
           1,
           2,
           3,
@@ -97,10 +97,10 @@ class SettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, \Drupal\Core\Form\FormStateInterface $form_state) {
     $maxsessions = $form_state->getValue(['session_limit_max']);
     if (!is_numeric($maxsessions)) {
-      $form_state->setErrorByName('session_limit_max', t('You must enter a number for the maximum number of active sessions'));
+      $form_state->setErrorByName('session_limit_max', $this->t('You must enter a number for the maximum number of active sessions'));
     }
     elseif ($maxsessions < 0) {
-      $form_state->setErrorByName('session_limit_max', t('Maximum number of active sessions must be positive'));
+      $form_state->setErrorByName('session_limit_max', $this->t('Maximum number of active sessions must be positive'));
     }
   }
 
