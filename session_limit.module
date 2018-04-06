@@ -31,6 +31,11 @@ define('SESSION_LIMIT_LOGGED_OUT_MESSAGE_SEVERITY', 'error');
 define('SESSION_LIMIT_LOGGED_OUT_MESSAGE', 'You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.');
 
 /**
+ * Default message displayed for a user on a new machine when sesison limit has been reached.
+ */
+define('SESSION_LIMIT_HIT_MESSAGE', 'The maximum number of simultaneous sessions (@number) for your account has been reached. You did not log off from a previous session or someone else is logged on to your account. This may indicate that your account has been compromised or that account sharing is limited on this site. Please contact the site administrator if you suspect your account has been compromised.');
+
+/**
  * Implements hook_help().
  */
 function session_limit_help($path, $args) {
@@ -39,13 +44,13 @@ function session_limit_help($path, $args) {
       $output = '<p>' . t("The two major notice messages to users are passed through Drupal's t() function. This maintains locale support, allowing you to override strings in any language, but such text is also available to be changed through other modules like !stringoverridesurl.", array('!stringoverridesurl' => l('String Overrides', 'http://drupal.org/project/stringoverrides'))) . '</p>';
       $output .= '<p>' . t("The two major strings are as follows:") . '</p>';
       $output .= '<p><blockquote>';
-      $output .=  'The maximum number of simultaneous sessions (@number) for your account has been reached. You did not log off from a previous session or someone else is logged on to your account. This may indicate that your account has been compromised or that account sharing is limited on this site. Please contact the site administrator if you suspect your account has been compromised.';
+      $output .= variable_get('session_limit_limit_hit_message', SESSION_LIMIT_HIT_MESSAGE);
       $output .= '</blockquote></p><p><blockquote>';
       $output .= 'You have been automatically logged out. Someone else has logged in with your username and password and the maximum number of @number simultaneous sessions was exceeded. This may indicate that your account has been compromised or that account sharing is not allowed on this site. Please contact the site administrator if you suspect your account has been compromised.';
       $output .= '</blockquote></p>';
       return $output;
     case 'session/limit':
-      return t('The maximum number of simultaneous sessions (@number) for your account has been reached. You did not log off from a previous session or someone else is logged on to your account. This may indicate that your account has been compromised or that account sharing is limited on this site. Please contact the site administrator if you suspect your account has been compromised.', array('@number' => session_limit_user_max_sessions()));
+      return t(variable_get('session_limit_limit_hit_message', SESSION_LIMIT_HIT_MESSAGE), array('@number' => session_limit_user_max_sessions()));
   }
 }
 
@@ -155,6 +160,14 @@ function session_limit_settings() {
       '#default_value' => variable_get('session_limit_masquerade_ignore', FALSE),
     );
   }
+  $form['session_limit_limit_hit_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Session limit has been hit message'),
+    '#default_value' => variable_get('session_limit_limit_hit_message', SESSION_LIMIT_HIT_MESSAGE),
+    '#description' => t('The message that is displayed to a user on the current workstation if the session limit has been reached.<br />
+      @number is replaced with the maximum number of simultaneous sessions.'),
+  );
+
   $form['session_limit_logged_out_message_severity'] = array(
     '#type' => 'select',
     '#title' => t('Logged out message severity'),
