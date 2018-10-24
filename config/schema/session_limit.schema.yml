@@ -1,5 +1,5 @@
 session_limit.settings:
-  type: mapping
+  type: config_object
   label: Settings
   mapping:
     session_limit_max:
@@ -11,4 +11,6 @@ session_limit.settings:
     session_limit_logged_out_message_severity:
       type: string
     session_limit_roles:
-      type: list
+      type: sequence
+      sequence:
+        type: integer
