@@ -292,7 +292,7 @@ class SessionLimit implements EventSubscriberInterface {
       // sessionId or vice versa. This is why this query is DISTINCT.
       $result = $this->database->select('sessions', 's')
         ->distinct()
-        ->fields('s', array('sid'))
+        ->fields('s', array('sid', 'timestamp'))
         ->condition('s.uid', $event->getAccount()->id())
         ->orderBy('timestamp', 'ASC')
         ->range(0, $limit)
