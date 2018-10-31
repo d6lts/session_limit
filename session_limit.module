@@ -425,6 +425,8 @@ function session_limit_user_settings_submit($form, &$form_state) {
 function session_limit_page() {
   global $user;
 
+  $form = array();
+
   if (variable_get('session_limit_behaviour', SESSION_LIMIT_DO_NOTHING) == SESSION_LIMIT_DISALLOW_NEW) {
     session_destroy();
     $user = drupal_anonymous_user();
@@ -433,10 +435,16 @@ function session_limit_page() {
   }
 
   $result = db_query('SELECT * FROM {sessions} WHERE uid = :uid', array(':uid' => $user->uid));
-  foreach ($result as $obj) {
+
+  $active_sessions = array();
+  $session_references = array();
+
+  foreach ($result as $session_reference => $obj) {
+    $active_sessions[$session_reference] = $obj->sid;
+
     $message = $user->sid == $obj->sid ? t('Your current session.') : '';
 
-    $sids[$obj->sid] = t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>',
+    $session_references[$session_reference] = t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>',
       array(
         '%host' => $obj->hostname,
         '@message' => $message,
@@ -444,10 +452,15 @@ function session_limit_page() {
       );
   }
 
-  $form['sid'] = array(
+  $form['active_sessions'] = array(
+    '#type' => 'value',
+    '#value' => $active_sessions,
+  );
+
+  $form['session_reference'] = array(
     '#type' => 'radios',
     '#title' => t('Select a session to disconnect.'),
-    '#options' => $sids,
+    '#options' => $session_references,
   );
 
   $form['submit'] = array(
@@ -462,11 +475,16 @@ function session_limit_page() {
  * Handler for submissions from session_limit_page().
  */
 function session_limit_page_submit($form, &$form_state) {
-  if ($GLOBALS['user']->sid == $form_state['values']['sid']) {
+  global $user;
+
+  $session_reference = $form_state['values']['session_reference'];
+  $sid = $form['active_sessions']['#value'][$session_reference];
+
+  if ($user->sid == $sid) {
     drupal_goto('user/logout');
   }
   else {
-    session_limit_invoke_session_limit($form_state['values']['sid'], 'disconnect');
+    session_limit_invoke_session_limit($sid, 'disconnect');
     drupal_goto();
   }
 }
