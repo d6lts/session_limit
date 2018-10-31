@@ -1,3 +1,9 @@
 name = Session Limit
 description = "Limit simultaneous user sessions."
 core = 6.x
+
+; Information added by Drupal 6 LTS vendors on 2018-10-31
+version = "6.x-2.5"
+core = "6.x"
+project = "session_limit"
+datestamp = "1541010809"
