@@ -36,22 +36,27 @@ class SessionLimitForm extends FormBase {
 
     $user = \Drupal::currentUser();
 
-    $sids = [];
+    $form['active_sessions'] = [
+      '#type' => 'value',
+      '#value' => $session_limit->getUserActiveSessions($user),
+    ];
 
-    foreach ($session_limit->getUserActiveSessions($user) as $obj) {
+    $session_references = [];
+
+    foreach ($form['active_sessions']['#value'] as $session_reference => $obj) {
       $message = $current_session_id == $obj->sid ? $this->t('Your current session.') : '';
 
-      $sids[$obj->sid] = $this->t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>', [
+      $session_references[$session_reference] = $this->t('<strong>Host:</strong> %host (idle: %time) <b>@message</b>', [
         '%host' => $obj->hostname,
         '@message' => $message,
         '%time' => \Drupal::service("date.formatter")->formatInterval(time() - $obj->timestamp),
       ]);
     }
 
-    $form['sid'] = [
+    $form['session_reference'] = [
       '#type' => 'radios',
       '#title' => $this->t('Select a session to disconnect.'),
-      '#options' => $sids,
+      '#options' => $session_references,
     ];
 
     $form['submit'] = [
@@ -69,7 +74,8 @@ class SessionLimitForm extends FormBase {
 
     /** @var SessionLimit $session_limit */
     $session_limit = \Drupal::service('session_limit');
-    $sid = $form_state->getValue(['sid']);
+    $session_reference = $form_state->getValue(['session_reference']);
+    $sid = $form['active_sessions']['#value'][$session_reference]->sid;
 
     if ($current_session_id == $sid) {
       // @todo the user is not seeing the message below.
